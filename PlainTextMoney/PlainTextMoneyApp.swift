@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct PlainTextMoneyApp: App {
@@ -13,5 +14,6 @@ struct PlainTextMoneyApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [Account.self, AccountUpdate.self])
     }
 }
