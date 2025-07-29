@@ -74,6 +74,11 @@ struct DashboardView: View {
             .sheet(isPresented: $showingAddAccount) {
                 AddAccountView()
             }
+            .overlay(alignment: .bottomLeading) {
+                #if DEBUG
+                debugTestDataButton
+                #endif
+            }
         }
     }
     
@@ -98,5 +103,33 @@ struct DashboardView: View {
             }
         }
     }
+    
+    #if DEBUG
+    private var debugTestDataButton: some View {
+        VStack(spacing: 8) {
+            Button("Load Test Data") {
+                TestDataGenerator.generateTestData(modelContext: modelContext)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.blue.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+            
+            Button("Clear All") {
+                TestDataGenerator.clearAllData(modelContext: modelContext)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.red.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+        }
+        .padding(.leading, 16)
+        .padding(.bottom, 16)
+    }
+    #endif
 }
 
