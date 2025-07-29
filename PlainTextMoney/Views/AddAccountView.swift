@@ -16,7 +16,7 @@ struct AddAccountView: View {
     @State private var initialValue = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Account Details") {
                     TextField("Account name", text: $accountName)

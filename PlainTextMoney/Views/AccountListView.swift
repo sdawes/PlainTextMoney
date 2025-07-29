@@ -14,23 +14,30 @@ struct AccountListView: View {
     @State private var showingAddAccount = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 ForEach(accounts, id: \.name) { account in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(account.name)
-                            .font(.headline)
-                        HStack {
-                            Text("£\(currentValue(for: account).formatted())")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Spacer()
-                            Text("Created: \(account.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    NavigationLink(destination: AccountDetailView(account: account)) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(account.name)
+                                    .font(.headline)
+                                Spacer()
+                                Text("£\(currentValue(for: account).formatted())")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
+                            HStack {
+                                Text("Created: \(account.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
+                .onDelete(perform: deleteAccounts)
             }
             .navigationTitle("Accounts")
             .toolbar {
@@ -46,6 +53,14 @@ struct AccountListView: View {
     
     private func currentValue(for account: Account) -> Decimal {
         account.updates.last?.value ?? 0
+    }
+    
+    private func deleteAccounts(offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                modelContext.delete(accounts[index])
+            }
+        }
     }
 }
 
