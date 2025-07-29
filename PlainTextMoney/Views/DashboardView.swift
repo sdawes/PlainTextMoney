@@ -1,5 +1,5 @@
 //
-//  AccountListView.swift
+//  DashboardView.swift
 //  PlainTextMoney
 //
 //  Created by Stephen Dawes on 29/07/2025.
@@ -8,7 +8,7 @@
 import SwiftUI
 import SwiftData
 
-struct AccountListView: View {
+struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     @State private var showingAddAccount = false
@@ -16,6 +16,31 @@ struct AccountListView: View {
     var body: some View {
         NavigationStack {
             List {
+                // Portfolio Summary Section
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Total Portfolio")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        HStack {
+                            Text("£\(totalPortfolioValue.formatted())")
+                                .font(.largeTitle)
+                                .fontWeight(.bold)
+                            Spacer()
+                            Text("\(activeAccountCount) accounts")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+                .listRowBackground(Color(.systemGray6))
+                
+                // Accounts Section
+                Section("Accounts") {
                 ForEach(accounts, id: \.name) { account in
                     NavigationLink(destination: AccountDetailView(account: account)) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -38,8 +63,9 @@ struct AccountListView: View {
                     }
                 }
                 .onDelete(perform: deleteAccounts)
+                }
             }
-            .navigationTitle("Accounts")
+            .navigationTitle("Portfolio")
             .toolbar {
                 Button(action: { showingAddAccount = true }) {
                     Image(systemName: "plus")
@@ -53,6 +79,16 @@ struct AccountListView: View {
     
     private func currentValue(for account: Account) -> Decimal {
         account.updates.last?.value ?? 0
+    }
+    
+    private var totalPortfolioValue: Decimal {
+        accounts.filter { $0.isActive }.reduce(0) { total, account in
+            total + currentValue(for: account)
+        }
+    }
+    
+    private var activeAccountCount: Int {
+        accounts.filter { $0.isActive }.count
     }
     
     private func deleteAccounts(offsets: IndexSet) {
