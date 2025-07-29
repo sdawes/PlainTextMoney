@@ -16,54 +16,51 @@ struct AccountDetailView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 20) {
+            List {
                 // Current Value Section
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Current Value")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Text("£\(currentValue.formatted())")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Current Value")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        HStack {
+                            Text("£\(currentValue.formatted())")
+                                .font(.largeTitle)
+                                .fontWeight(.bold)
+                            Spacer()
+                        }
+                    }
+                    .padding(.vertical, 8)
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
+                .listRowBackground(Color(.systemGray6))
                 
                 // Update History Section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Update History")
-                        .font(.headline)
-                    
+                Section("Update History") {
                     if account.updates.isEmpty {
                         Text("No updates yet")
                             .foregroundColor(.secondary)
                             .italic()
                     } else {
-                        List {
-                            ForEach(sortedUpdates, id: \.date) { update in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("£\(update.value.formatted())")
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                        Text(update.date.formatted(date: .abbreviated, time: .shortened))
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    Spacer()
+                        ForEach(sortedUpdates, id: \.date) { update in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("£\(update.value.formatted())")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Text(update.date.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
-                                .padding(.vertical, 2)
+                                Spacer()
                             }
+                            .padding(.vertical, 2)
                         }
-                        .listStyle(.plain)
                     }
                 }
-                
-                Spacer()
             }
-            .padding()
             .navigationTitle(account.name)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
