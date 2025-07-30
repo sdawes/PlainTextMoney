@@ -37,7 +37,6 @@ struct DashboardView: View {
                     }
                     .padding(.vertical, 8)
                 }
-                .listRowBackground(Color(.systemGray6))
                 
                 // Accounts Section
                 Section("Accounts") {
@@ -65,7 +64,6 @@ struct DashboardView: View {
                 .onDelete(perform: deleteAccounts)
                 }
             }
-            .navigationTitle("Portfolio")
             .toolbar {
                 Button(action: { showingAddAccount = true }) {
                     Image(systemName: "plus")
