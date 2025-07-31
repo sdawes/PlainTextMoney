@@ -11,6 +11,7 @@ import SwiftData
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
+    @Query(sort: \PortfolioSnapshot.date, order: .reverse) private var portfolioSnapshots: [PortfolioSnapshot]
     @State private var showingAddAccount = false
     
     var body: some View {
@@ -80,7 +81,13 @@ struct DashboardView: View {
     
     
     private var totalPortfolioValue: Decimal {
-        accounts.filter { $0.isActive }.reduce(0) { total, account in
+        // Try to get the latest portfolio snapshot first
+        if let latestSnapshot = portfolioSnapshots.first {
+            return latestSnapshot.totalValue
+        }
+        
+        // Fallback to real-time calculation if no snapshots exist
+        return accounts.filter { $0.isActive }.reduce(0) { total, account in
             total + currentValue(for: account)
         }
     }
@@ -91,8 +98,26 @@ struct DashboardView: View {
     
     private func deleteAccounts(offsets: IndexSet) {
         withAnimation {
+            var earliestAccountDate: Date? = nil
+            
             for index in offsets {
-                modelContext.delete(accounts[index])
+                let accountToDelete = accounts[index]
+                
+                // Track the earliest account creation date for portfolio recalculation
+                if let earliest = earliestAccountDate {
+                    earliestAccountDate = min(earliest, accountToDelete.createdAt)
+                } else {
+                    earliestAccountDate = accountToDelete.createdAt
+                }
+                
+                modelContext.delete(accountToDelete)
+            }
+            
+            // Recalculate portfolio snapshots in background to avoid blocking UI
+            if let earliestDate = earliestAccountDate {
+                Task {
+                    await SnapshotService.recalculatePortfolioSnapshotsAsync(from: earliestDate, modelContext: modelContext)
+                }
             }
         }
     }
@@ -141,6 +166,17 @@ struct DashboardView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color.green.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+            
+            Button("Debug Portfolio") {
+                SnapshotService.verifyPortfolioSnapshots(modelContext: modelContext)
+                SnapshotService.debugPortfolioSnapshots(modelContext: modelContext)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.purple.opacity(0.8))
             .foregroundColor(.white)
             .cornerRadius(6)
             

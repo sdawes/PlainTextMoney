@@ -14,6 +14,6 @@ struct PlainTextMoneyApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [Account.self, AccountUpdate.self, AccountSnapshot.self])
+        .modelContainer(for: [Account.self, AccountUpdate.self, AccountSnapshot.self, PortfolioSnapshot.self])
     }
 }

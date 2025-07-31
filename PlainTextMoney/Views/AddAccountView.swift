@@ -54,6 +54,9 @@ struct AddAccountView: View {
         // Create initial account snapshot
         SnapshotService.updateAccountSnapshot(for: newAccount, value: value, modelContext: modelContext)
         
+        // Update portfolio snapshot for today
+        SnapshotService.updatePortfolioSnapshot(modelContext: modelContext)
+        
         dismiss()
     }
 }

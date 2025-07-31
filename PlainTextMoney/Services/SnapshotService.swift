@@ -413,5 +413,402 @@ class SnapshotService {
         
         print("==========================================\n")
     }
+    
+    static func verifyPortfolioSnapshots(modelContext: ModelContext) -> Bool {
+        print("🔍 PORTFOLIO SNAPSHOT VERIFICATION")
+        print("==================================")
+        
+        // Get all portfolio snapshots
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        
+        guard let allSnapshots = try? modelContext.fetch(portfolioDescriptor) else {
+            print("❌ Error fetching portfolio snapshots")
+            return false
+        }
+        
+        // Sort snapshots by date
+        let snapshots = allSnapshots.sorted { $0.date < $1.date }
+        
+        if snapshots.isEmpty {
+            print("❌ No portfolio snapshots found")
+            return false
+        }
+        
+        // Get accounts to determine expected date range
+        let accountDescriptor = FetchDescriptor<Account>()
+        guard let accounts = try? modelContext.fetch(accountDescriptor),
+              !accounts.isEmpty else {
+            print("❌ No accounts found")
+            return false
+        }
+        
+        let earliestAccountDate = accounts.map { $0.createdAt }.min() ?? Date()
+        let startDate = Calendar.current.startOfDay(for: earliestAccountDate)
+        let today = Calendar.current.startOfDay(for: Date())
+        let expectedDays = Calendar.current.dateComponents([.day], from: startDate, to: today).day ?? 0
+        let expectedSnapshots = expectedDays + 1
+        
+        print("📊 Portfolio Snapshot Analysis:")
+        print("   Total snapshots: \(snapshots.count)")
+        print("   Expected snapshots: \(expectedSnapshots) (from \(startDate.formatted(date: .abbreviated, time: .omitted)) to \(today.formatted(date: .abbreviated, time: .omitted)))")
+        
+        let isPerfect = snapshots.count == expectedSnapshots
+        print("   Status: \(isPerfect ? "✅ PERFECT COVERAGE" : "❌ MISSING SNAPSHOTS")")
+        
+        // Check for gaps
+        var gapCount = 0
+        for i in 1..<snapshots.count {
+            let previousDate = snapshots[i-1].date
+            let currentDate = snapshots[i].date
+            
+            let daysBetween = Calendar.current.dateComponents([.day], from: previousDate, to: currentDate).day ?? 0
+            
+            if daysBetween > 1 {
+                let missingDays = daysBetween - 1
+                gapCount += missingDays
+                print("   ❌ GAP: \(missingDays) missing days between \(previousDate.formatted(date: .abbreviated, time: .omitted)) and \(currentDate.formatted(date: .abbreviated, time: .omitted))")
+            }
+        }
+        
+        if gapCount == 0 {
+            print("   ✅ No gaps detected - continuous daily coverage")
+        } else {
+            print("   ❌ Total gap days: \(gapCount)")
+        }
+        
+        // Show value range
+        if let firstSnapshot = snapshots.first {
+            print("📅 Portfolio Value Range:")
+            print("   First: \(firstSnapshot.date.formatted(date: Date.FormatStyle.DateStyle.abbreviated, time: Date.FormatStyle.TimeStyle.omitted)) = £\(firstSnapshot.totalValue)")
+        }
+        if let lastSnapshot = snapshots.last, snapshots.count > 1 {
+            print("   Latest: \(lastSnapshot.date.formatted(date: Date.FormatStyle.DateStyle.abbreviated, time: Date.FormatStyle.TimeStyle.omitted)) = £\(lastSnapshot.totalValue)")
+            
+            if let firstSnapshot = snapshots.first {
+                let growth = lastSnapshot.totalValue - firstSnapshot.totalValue
+                print("   Growth: £\(growth)")
+            }
+        }
+        
+        print("==================================\n")
+        return isPerfect && gapCount == 0
+    }
+    
+    static func debugPortfolioSnapshots(modelContext: ModelContext) {
+        print("🔍 DETAILED PORTFOLIO SNAPSHOT DEBUG")
+        print("===================================")
+        
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        
+        guard let allSnapshots = try? modelContext.fetch(portfolioDescriptor) else {
+            print("❌ Error fetching portfolio snapshots")
+            return
+        }
+        
+        // Sort snapshots by date
+        let snapshots = allSnapshots.sorted { $0.date < $1.date }
+        
+        print("📊 Found \(snapshots.count) portfolio snapshots:")
+        
+        for (index, snapshot) in snapshots.enumerated() {
+            let dateStr = snapshot.date.formatted(date: Date.FormatStyle.DateStyle.abbreviated, time: Date.FormatStyle.TimeStyle.omitted)
+            print("   \(index + 1). \(dateStr): £\(snapshot.totalValue)")
+            
+            // Show only first 10 and last 10 if there are many
+            if snapshots.count > 20 && index == 9 {
+                let remaining = snapshots.count - 20
+                print("   ... (\(remaining) more snapshots) ...")
+                // Skip to the last 10
+                continue
+            }
+            
+            if snapshots.count > 20 && index < snapshots.count - 10 && index > 9 {
+                continue
+            }
+        }
+        
+        print("===================================\n")
+    }
     #endif
+    
+    // MARK: - Portfolio Snapshot Management
+    
+    static func updatePortfolioSnapshot(for date: Date = Date(), modelContext: ModelContext) {
+        let snapshotDate = Calendar.current.startOfDay(for: date)
+        
+        // Calculate total portfolio value from all active accounts
+        let totalValue = calculatePortfolioTotal(for: snapshotDate, modelContext: modelContext)
+        
+        #if DEBUG
+        print("📊 Creating portfolio snapshot for \(snapshotDate.formatted(date: .abbreviated, time: .omitted)) = £\(totalValue)")
+        #endif
+        
+        // Find existing portfolio snapshot for this date
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        let allSnapshots = try? modelContext.fetch(portfolioDescriptor)
+        let existingSnapshot = allSnapshots?.first { snapshot in
+            Calendar.current.isDate(snapshot.date, inSameDayAs: snapshotDate)
+        }
+        
+        if let existingSnapshot = existingSnapshot {
+            // Update existing snapshot
+            existingSnapshot.totalValue = totalValue
+        } else {
+            // Create new snapshot
+            let newSnapshot = PortfolioSnapshot(date: snapshotDate, totalValue: totalValue)
+            modelContext.insert(newSnapshot)
+        }
+        
+        do {
+            try modelContext.save()
+        } catch {
+            print("Error updating portfolio snapshot: \(error)")
+        }
+    }
+    
+    static func recalculatePortfolioSnapshots(from startDate: Date, modelContext: ModelContext) {
+        let startDate = Calendar.current.startOfDay(for: startDate)
+        let today = Calendar.current.startOfDay(for: Date())
+        
+        #if DEBUG
+        print("🔄 Recalculating portfolio snapshots from \(startDate.formatted(date: .abbreviated, time: .omitted)) to \(today.formatted(date: .abbreviated, time: .omitted))")
+        #endif
+        
+        // Delete existing portfolio snapshots in the affected range
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        if let allSnapshots = try? modelContext.fetch(portfolioDescriptor) {
+            let snapshotsToDelete = allSnapshots.filter { snapshot in
+                snapshot.date >= startDate
+            }
+            
+            for snapshot in snapshotsToDelete {
+                modelContext.delete(snapshot)
+            }
+        }
+        
+        // Recreate snapshots day by day
+        var currentDate = startDate
+        while currentDate <= today {
+            let totalValue = calculatePortfolioTotal(for: currentDate, modelContext: modelContext)
+            let newSnapshot = PortfolioSnapshot(date: currentDate, totalValue: totalValue)
+            modelContext.insert(newSnapshot)
+            
+            currentDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+        
+        do {
+            try modelContext.save()
+            #if DEBUG
+            print("✅ Portfolio snapshot recalculation complete")
+            #endif
+        } catch {
+            print("Error recalculating portfolio snapshots: \(error)")
+        }
+    }
+    
+    static func recalculatePortfolioSnapshotsAsync(from startDate: Date, modelContext: ModelContext) async {
+        let startDate = Calendar.current.startOfDay(for: startDate)
+        let today = Calendar.current.startOfDay(for: Date())
+        
+        #if DEBUG
+        print("🔄 [ASYNC] Recalculating portfolio snapshots from \(startDate.formatted(date: .abbreviated, time: .omitted)) to \(today.formatted(date: .abbreviated, time: .omitted))")
+        #endif
+        
+        // Perform the expensive work on a background thread
+        await Task.detached {
+            // Fetch accounts once for the entire operation
+            let accountsDescriptor = FetchDescriptor<Account>()
+            guard let allAccounts = try? modelContext.fetch(accountsDescriptor) else {
+                #if DEBUG
+                print("❌ Failed to fetch accounts for portfolio recalculation")
+                #endif
+                return
+            }
+            
+            let activeAccounts = allAccounts.filter { $0.isActive }
+            
+            #if DEBUG
+            print("📋 Recalculating with \(activeAccounts.count) active accounts")
+            #endif
+            
+            // Delete existing portfolio snapshots in the affected range
+            let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+            if let allSnapshots = try? modelContext.fetch(portfolioDescriptor) {
+                let snapshotsToDelete = allSnapshots.filter { snapshot in
+                    snapshot.date >= startDate
+                }
+                
+                #if DEBUG
+                print("🗑️ Deleting \(snapshotsToDelete.count) existing portfolio snapshots")
+                #endif
+                
+                for snapshot in snapshotsToDelete {
+                    modelContext.delete(snapshot)
+                }
+            }
+            
+            // Create new snapshots in batches for better performance
+            var newSnapshots: [PortfolioSnapshot] = []
+            var currentDate = startDate
+            var dayCount = 0
+            
+            while currentDate <= today {
+                let totalValue = calculatePortfolioTotalOptimized(for: currentDate, accounts: activeAccounts)
+                let newSnapshot = PortfolioSnapshot(date: currentDate, totalValue: totalValue)
+                newSnapshots.append(newSnapshot)
+                dayCount += 1
+                
+                currentDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+            }
+            
+            #if DEBUG
+            print("📊 Created \(newSnapshots.count) new portfolio snapshots")
+            #endif
+            
+            // Insert all snapshots in batch
+            for snapshot in newSnapshots {
+                modelContext.insert(snapshot)
+            }
+            
+            // Save all changes at once
+            do {
+                try modelContext.save()
+                #if DEBUG
+                print("✅ [ASYNC] Portfolio snapshot recalculation complete - \(dayCount) days processed")
+                #endif
+            } catch {
+                #if DEBUG
+                print("❌ Error saving portfolio snapshots: \(error)")
+                #endif
+            }
+        }.value
+    }
+    
+    // Optimized version that doesn't fetch accounts from database each time
+    private static func calculatePortfolioTotalOptimized(for date: Date, accounts: [Account]) -> Decimal {
+        let snapshotDate = Calendar.current.startOfDay(for: date)
+        var totalValue: Decimal = 0
+        
+        for account in accounts {
+            if let accountValue = getAccountValueAt(date: snapshotDate, for: account) {
+                totalValue += accountValue
+            }
+        }
+        
+        return totalValue
+    }
+    
+    static func calculatePortfolioTotal(for date: Date, modelContext: ModelContext) -> Decimal {
+        let snapshotDate = Calendar.current.startOfDay(for: date)
+        
+        // Get all active accounts
+        let accountsDescriptor = FetchDescriptor<Account>()
+        
+        guard let allAccounts = try? modelContext.fetch(accountsDescriptor) else {
+            return 0
+        }
+        
+        // Filter for active accounts
+        let accounts = allAccounts.filter { $0.isActive }
+        
+        var totalValue: Decimal = 0
+        
+        for account in accounts {
+            // Find the latest account value at or before the snapshot date
+            if let accountValue = getAccountValueAt(date: snapshotDate, for: account) {
+                totalValue += accountValue
+            }
+        }
+        
+        return totalValue
+    }
+    
+    static func getAccountValueAt(date: Date, for account: Account) -> Decimal? {
+        let snapshotDate = Calendar.current.startOfDay(for: date)
+        
+        // First try to get value from account snapshots
+        let accountSnapshot = account.snapshots.first { snapshot in
+            Calendar.current.isDate(snapshot.date, inSameDayAs: snapshotDate)
+        }
+        
+        if let snapshot = accountSnapshot {
+            return snapshot.value
+        }
+        
+        // Fallback: find the latest update before or on this date
+        let updatesBeforeDate = account.updates
+            .filter { $0.date <= snapshotDate }
+            .sorted { $0.date > $1.date }
+        
+        return updatesBeforeDate.first?.value
+    }
+    
+    static func ensurePortfolioSnapshotCoverage(modelContext: ModelContext) {
+        #if DEBUG
+        print("🔧 Starting portfolio snapshot coverage...")
+        #endif
+        
+        // Get the earliest account creation date
+        let accountsDescriptor = FetchDescriptor<Account>()
+        guard let accounts = try? modelContext.fetch(accountsDescriptor),
+              !accounts.isEmpty else {
+            #if DEBUG
+            print("❌ No accounts found for portfolio snapshots")
+            #endif
+            return
+        }
+        
+        #if DEBUG
+        print("📋 Found \(accounts.count) accounts for portfolio calculation")
+        #endif
+        
+        let earliestDate = accounts.map { $0.createdAt }.min() ?? Date()
+        let startDate = Calendar.current.startOfDay(for: earliestDate)
+        let today = Calendar.current.startOfDay(for: Date())
+        
+        #if DEBUG
+        print("🔧 Ensuring portfolio snapshot coverage from \(startDate.formatted(date: .abbreviated, time: .omitted)) to \(today.formatted(date: .abbreviated, time: .omitted))")
+        #endif
+        
+        // Check for missing portfolio snapshots and fill gaps
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        let allPortfolioSnapshots = try? modelContext.fetch(portfolioDescriptor)
+        
+        #if DEBUG
+        print("📊 Found \(allPortfolioSnapshots?.count ?? 0) existing portfolio snapshots")
+        #endif
+        
+        var currentDate = startDate
+        var createdCount = 0
+        while currentDate <= today {
+            let existingSnapshot = allPortfolioSnapshots?.first { snapshot in
+                Calendar.current.isDate(snapshot.date, inSameDayAs: currentDate)
+            }
+            
+            if existingSnapshot == nil {
+                let totalValue = calculatePortfolioTotal(for: currentDate, modelContext: modelContext)
+                let newSnapshot = PortfolioSnapshot(date: currentDate, totalValue: totalValue)
+                modelContext.insert(newSnapshot)
+                createdCount += 1
+                
+                #if DEBUG
+                if createdCount <= 5 || createdCount % 100 == 0 {
+                    print("📸 Created portfolio snapshot \(createdCount): \(currentDate.formatted(date: .abbreviated, time: .omitted)) = £\(totalValue)")
+                }
+                #endif
+            }
+            
+            currentDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+        
+        #if DEBUG
+        print("📊 Created \(createdCount) portfolio snapshots")
+        #endif
+        
+        do {
+            try modelContext.save()
+        } catch {
+            print("Error ensuring portfolio snapshot coverage: \(error)")
+        }
+    }
 }

@@ -143,17 +143,36 @@ struct AccountDetailView: View {
         // Create/update account snapshot
         SnapshotService.updateAccountSnapshot(for: account, value: value, modelContext: modelContext)
         
+        // Update portfolio snapshot for today
+        SnapshotService.updatePortfolioSnapshot(modelContext: modelContext)
+        
         showingUpdateValue = false
         newValue = ""
     }
     
     private func deleteUpdates(offsets: IndexSet) {
         withAnimation {
+            var earliestDeletedDate: Date? = nil
+            
             for index in offsets {
                 let updateToDelete = sortedUpdates[index]
                 
+                // Track the earliest deleted date for portfolio recalculation
+                if let earliest = earliestDeletedDate {
+                    earliestDeletedDate = min(earliest, updateToDelete.date)
+                } else {
+                    earliestDeletedDate = updateToDelete.date
+                }
+                
                 // Use SnapshotService to handle deletion and snapshot recalculation
                 SnapshotService.deleteAccountUpdate(updateToDelete, from: account, modelContext: modelContext)
+            }
+            
+            // Recalculate portfolio snapshots in background to avoid blocking UI
+            if let earliestDate = earliestDeletedDate {
+                Task {
+                    await SnapshotService.recalculatePortfolioSnapshotsAsync(from: earliestDate, modelContext: modelContext)
+                }
             }
         }
     }

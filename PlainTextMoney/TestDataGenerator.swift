@@ -30,6 +30,11 @@ class TestDataGenerator {
         }
         print("✅ Complete snapshot coverage ensured")
         
+        // Ensure complete portfolio snapshot coverage
+        print("🔄 Ensuring complete portfolio snapshot coverage...")
+        SnapshotService.ensurePortfolioSnapshotCoverage(modelContext: modelContext)
+        print("✅ Complete portfolio snapshot coverage ensured")
+        
         // Save context
         try? modelContext.save()
         print("✅ Saved to database")
@@ -58,6 +63,14 @@ class TestDataGenerator {
         let snapshotDescriptor = FetchDescriptor<AccountSnapshot>()
         if let snapshots = try? modelContext.fetch(snapshotDescriptor) {
             for snapshot in snapshots {
+                modelContext.delete(snapshot)
+            }
+        }
+        
+        // Clear all portfolio snapshots
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        if let portfolioSnapshots = try? modelContext.fetch(portfolioDescriptor) {
+            for snapshot in portfolioSnapshots {
                 modelContext.delete(snapshot)
             }
         }
