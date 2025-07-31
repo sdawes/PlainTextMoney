@@ -134,6 +134,156 @@ class SnapshotService {
         fillMissingSnapshots(for: account, upTo: Date(), modelContext: modelContext)
     }
     
+    static func deleteAccountUpdate(_ update: AccountUpdate, from account: Account, modelContext: ModelContext) {
+        let deletionDate = Calendar.current.startOfDay(for: update.date)
+        
+        #if DEBUG
+        print("🗑️ Deleting update for \(account.name) on \(deletionDate.formatted(date: .abbreviated, time: .omitted)) = £\(update.value)")
+        #endif
+        
+        // Delete the update first
+        modelContext.delete(update)
+        
+        // Find the date range that needs recalculation
+        let nextUpdateDate = findNextUpdateDate(after: deletionDate, in: account)
+        let endDate = nextUpdateDate ?? Date()
+        
+        #if DEBUG
+        print("   Recalculating snapshots from \(deletionDate.formatted(date: .abbreviated, time: .omitted)) to \(endDate.formatted(date: .abbreviated, time: .omitted))")
+        #endif
+        
+        // Recalculate snapshots in the affected range
+        recalculateSnapshotRange(for: account, from: deletionDate, to: endDate, modelContext: modelContext)
+        
+        do {
+            try modelContext.save()
+            #if DEBUG
+            print("   ✅ Deletion and recalculation complete")
+            #endif
+        } catch {
+            print("Error saving after deletion: \(error)")
+        }
+    }
+    
+    private static func findNextUpdateDate(after date: Date, in account: Account) -> Date? {
+        return account.updates
+            .filter { $0.date > date }
+            .sorted { $0.date < $1.date }
+            .first?.date
+    }
+    
+    private static func recalculateSnapshotRange(for account: Account, from startDate: Date, to endDate: Date, modelContext: ModelContext) {
+        // Find the value to carry forward from before the deletion
+        let previousValue = findPreviousValue(before: startDate, in: account)
+        
+        #if DEBUG
+        if let prev = previousValue {
+            print("   Previous value to carry forward: £\(prev)")
+        } else {
+            print("   No previous value found - this was likely the first update")
+        }
+        #endif
+        
+        // Delete existing snapshots in the affected range
+        let snapshotsToDelete = account.snapshots.filter { snapshot in
+            snapshot.date >= startDate && snapshot.date < endDate
+        }
+        
+        #if DEBUG
+        print("   Deleting \(snapshotsToDelete.count) existing snapshots in range")
+        #endif
+        
+        for snapshot in snapshotsToDelete {
+            modelContext.delete(snapshot)
+        }
+        
+        // Recreate snapshots with correct values
+        var currentDate = startDate
+        var snapshotsCreated = 0
+        
+        while currentDate < endDate {
+            // Check if there are any remaining updates on this specific date (after deletion)
+            let updatesForDate = account.updates.filter { update in
+                Calendar.current.isDate(update.date, inSameDayAs: currentDate)
+            }.sorted { $0.date > $1.date } // Get latest update for the day
+            
+            let valueToUse: Decimal
+            if let latestUpdateForDay = updatesForDate.first {
+                // Use the latest update value for this day
+                valueToUse = latestUpdateForDay.value
+            } else if let carryForward = previousValue {
+                // Carry forward from previous value
+                valueToUse = carryForward
+            } else {
+                // Edge case: no previous value available (deleted the very first update)
+                // Look for any remaining updates in the account to get a base value
+                if let anyRemainingUpdate = account.updates.sorted(by: { $0.date < $1.date }).first {
+                    valueToUse = anyRemainingUpdate.value
+                } else {
+                    // Truly no updates left - this shouldn't happen in normal usage
+                    valueToUse = 0
+                    #if DEBUG
+                    print("   ⚠️ Warning: No updates remaining for account, using £0")
+                    #endif
+                }
+            }
+            
+            let newSnapshot = AccountSnapshot(date: currentDate, value: valueToUse, account: account)
+            modelContext.insert(newSnapshot)
+            snapshotsCreated += 1
+            
+            currentDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+        
+        #if DEBUG
+        print("   Created \(snapshotsCreated) new snapshots")
+        #endif
+    }
+    
+    private static func findPreviousValue(before date: Date, in account: Account) -> Decimal? {
+        // Find the most recent update before the deletion date
+        let previousUpdates = account.updates
+            .filter { $0.date < date }
+            .sorted { $0.date > $1.date }
+        
+        return previousUpdates.first?.value
+    }
+    
+    static func debugSimpleTestAccount(accounts: [Account]) {
+        if let simpleAccount = accounts.first(where: { $0.name == "Simple Test Account" }) {
+            print("🧪 SIMPLE TEST ACCOUNT ANALYSIS")
+            print("===============================")
+            
+            let sortedUpdates = simpleAccount.updates.sorted { $0.date < $1.date }
+            let sortedSnapshots = simpleAccount.snapshots.sorted { $0.date < $1.date }
+            
+            print("📊 Summary:")
+            print("   Account created: \(simpleAccount.createdAt.formatted(date: .abbreviated, time: .omitted))")
+            print("   Updates: \(sortedUpdates.count)")
+            print("   Snapshots: \(sortedSnapshots.count)")
+            
+            print("\n📅 All Updates:")
+            for update in sortedUpdates {
+                print("   \(update.date.formatted(date: .abbreviated, time: .shortened)): £\(update.value)")
+            }
+            
+            if sortedSnapshots.count > 0 {
+                print("\n📸 Sample Snapshots (first 10):")
+                for snapshot in sortedSnapshots.prefix(10) {
+                    print("   \(snapshot.date.formatted(date: .abbreviated, time: .omitted)): £\(snapshot.value)")
+                }
+                
+                if sortedSnapshots.count > 10 {
+                    print("   ... and \(sortedSnapshots.count - 10) more snapshots")
+                }
+            }
+            
+            print("===============================\n")
+        } else {
+            print("❌ Simple Test Account not found")
+        }
+    }
+    
     #if DEBUG
     static func printSnapshotDebugInfo(for account: Account) {
         print("=== Debug: Snapshots for \(account.name) ===")
@@ -227,6 +377,34 @@ class SnapshotService {
         print("Status: \(allAccountsPerfect ? "✅ PERFECT" : "❌ INCOMPLETE")")
         
         return allAccountsPerfect
+    }
+    
+    static func debugDeletionScenario(for account: Account) {
+        print("🔍 DELETION SCENARIO DEBUG FOR \(account.name)")
+        print("==========================================")
+        
+        let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+        let sortedSnapshots = account.snapshots.sorted { $0.date < $1.date }
+        
+        print("📊 Current State:")
+        print("   Updates: \(sortedUpdates.count)")
+        print("   Snapshots: \(sortedSnapshots.count)")
+        
+        if !sortedUpdates.isEmpty {
+            print("\n📅 Recent Updates:")
+            for update in sortedUpdates.suffix(5) {
+                print("   \(update.date.formatted(date: .abbreviated, time: .shortened)): £\(update.value)")
+            }
+        }
+        
+        if !sortedSnapshots.isEmpty {
+            print("\n📸 Recent Snapshots:")
+            for snapshot in sortedSnapshots.suffix(5) {
+                print("   \(snapshot.date.formatted(date: .abbreviated, time: .omitted)): £\(snapshot.value)")
+            }
+        }
+        
+        print("==========================================\n")
     }
     #endif
 }

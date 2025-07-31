@@ -23,6 +23,12 @@ class TestDataGenerator {
         generateHistoricalUpdates(for: accounts, modelContext: modelContext)
         print("✅ Generated historical updates")
         
+        // Generate simple test data for the Simple Test Account
+        if let simpleAccount = accounts.first(where: { $0.name == "Simple Test Account" }) {
+            generateSimpleTestData(for: simpleAccount, modelContext: modelContext)
+            print("✅ Generated simple test data pattern")
+        }
+        
         // Ensure complete snapshot coverage for all accounts
         print("🔄 Ensuring complete snapshot coverage...")
         for account in accounts {
@@ -72,7 +78,8 @@ class TestDataGenerator {
             ("Emergency Fund", 3000),
             ("Investment Account", 8000),
             ("House Deposit", 15000),
-            ("Crypto Portfolio", 2000)
+            ("Crypto Portfolio", 2000),
+            ("Simple Test Account", 1000)
         ]
         
         var accounts: [Account] = []
@@ -80,9 +87,13 @@ class TestDataGenerator {
         for (name, initialValue) in accountData {
             let account = Account(name: name)
             
-            // Set creation date to 2 years ago
+            // Set creation date - Simple Test Account gets 6 months ago, others get 2 years ago
             let calendar = Calendar.current
-            account.createdAt = calendar.date(byAdding: .year, value: -2, to: Date()) ?? Date()
+            if name == "Simple Test Account" {
+                account.createdAt = calendar.date(byAdding: .month, value: -6, to: Date()) ?? Date()
+            } else {
+                account.createdAt = calendar.date(byAdding: .year, value: -2, to: Date()) ?? Date()
+            }
             
             modelContext.insert(account)
             accounts.append(account)
@@ -109,6 +120,11 @@ class TestDataGenerator {
         
         while currentDate < endDate {
             for (index, account) in accounts.enumerated() {
+                // Skip the Simple Test Account - it gets its own pattern
+                if account.name == "Simple Test Account" {
+                    continue
+                }
+                
                 // Skip some updates randomly to make it more realistic
                 if Bool.random() && Double.random(in: 0...1) > 0.8 {
                     continue
@@ -167,6 +183,60 @@ class TestDataGenerator {
         default:
             return Double.random(in: -1.0...2.0)
         }
+    }
+    
+    private static func generateSimpleTestData(for account: Account, modelContext: ModelContext) {
+        let calendar = Calendar.current
+        let startDate = account.createdAt
+        let endDate = Date()
+        
+        print("📋 Generating simple test data for \(account.name)")
+        print("   Period: \(startDate.formatted(date: .abbreviated, time: .omitted)) to \(endDate.formatted(date: .abbreviated, time: .omitted))")
+        
+        var currentValue: Decimal = 1000 // Starting value
+        var updateCount = 0
+        
+        // Start from the month after account creation
+        var currentMonth = calendar.date(byAdding: .month, value: 0, to: startDate) ?? startDate
+        
+        while currentMonth < endDate {
+            // First update on the 1st of the month
+            if let firstOfMonth = calendar.date(bySetting: .day, value: 1, of: currentMonth) {
+                if firstOfMonth >= startDate && firstOfMonth <= endDate {
+                    currentValue += 100 // Increase by £100
+                    
+                    let update = AccountUpdate(value: currentValue, account: account)
+                    update.date = firstOfMonth.addingTimeInterval(10 * 3600) // 10 AM
+                    modelContext.insert(update)
+                    
+                    SnapshotService.updateAccountSnapshot(for: account, value: currentValue, date: update.date, modelContext: modelContext)
+                    updateCount += 1
+                    
+                    print("   \(firstOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue)")
+                }
+            }
+            
+            // Second update on the 15th of the month
+            if let fifteenthOfMonth = calendar.date(bySetting: .day, value: 15, of: currentMonth) {
+                if fifteenthOfMonth >= startDate && fifteenthOfMonth <= endDate {
+                    currentValue += 50 // Increase by £50
+                    
+                    let update = AccountUpdate(value: currentValue, account: account)
+                    update.date = fifteenthOfMonth.addingTimeInterval(14 * 3600) // 2 PM
+                    modelContext.insert(update)
+                    
+                    SnapshotService.updateAccountSnapshot(for: account, value: currentValue, date: update.date, modelContext: modelContext)
+                    updateCount += 1
+                    
+                    print("   \(fifteenthOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue)")
+                }
+            }
+            
+            // Move to next month
+            currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+        }
+        
+        print("   Generated \(updateCount) predictable updates")
     }
 }
 #endif

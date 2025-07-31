@@ -58,6 +58,7 @@ struct AccountDetailView: View {
                             }
                             .padding(.vertical, 2)
                         }
+                        .onDelete(perform: deleteUpdates)
                     }
                 }
             }
@@ -120,5 +121,16 @@ struct AccountDetailView: View {
         
         showingUpdateValue = false
         newValue = ""
+    }
+    
+    private func deleteUpdates(offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                let updateToDelete = sortedUpdates[index]
+                
+                // Use SnapshotService to handle deletion and snapshot recalculation
+                SnapshotService.deleteAccountUpdate(updateToDelete, from: account, modelContext: modelContext)
+            }
+        }
     }
 }
