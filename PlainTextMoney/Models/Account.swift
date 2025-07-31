@@ -18,6 +18,9 @@ class Account {
     @Relationship(deleteRule: .cascade) 
     var updates: [AccountUpdate] = []
     
+    @Relationship(deleteRule: .cascade)
+    var snapshots: [AccountSnapshot] = []
+    
     init(name: String) {
         self.name = name
         self.createdAt = Date()

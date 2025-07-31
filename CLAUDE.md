@@ -37,20 +37,84 @@ Each time the user changes an account's value.
 
 ### `AccountSnapshot`
 Daily snapshot of an account's value for chart performance.
-- `date`: Date - Snapshot date
-- `value`: Decimal - End-of-day account value
+- `date`: Date - Snapshot date (normalized to start-of-day for consistent daily keys)
+- `value`: Decimal - Latest known account value for that calendar day
 - `account`: Account - Link to parent account
+
+**AccountSnapshot Logic:**
+- **One snapshot per account per calendar day** (date normalized to start-of-day)
+- **Same-day updates**: If user updates account multiple times in one day, replace that day's snapshot with the latest update value
+- **Days with no updates**: Create snapshot using the most recent update value from any previous day (carry forward)
+- **Purpose**: Enables fast chart rendering and historical account value lookup without scanning all AccountUpdates
 
 ### `PortfolioSnapshot`
 Daily snapshot of total value of all active accounts.
-- `date`: Date - Snapshot date
-- `totalValue`: Decimal - Total portfolio value on that day
+- `date`: Date - Snapshot date (normalized to start-of-day for consistent daily keys)
+- `totalValue`: Decimal - Sum of all active accounts' snapshot values for that calendar day
+
+**PortfolioSnapshot Logic:**
+- **One snapshot per calendar day** for total portfolio value
+- **Calculation**: Sum of all active accounts' AccountSnapshot values for that specific day
+- **Trigger**: Recalculated whenever any AccountSnapshot is created/updated for that day
+- **Historical gaps**: When creating snapshots for past days, carry forward each account's most recent value and sum for portfolio total
+- **Purpose**: Enables fast portfolio chart rendering and current total display without real-time aggregation across all accounts
 
 ## Data Update Flow
-1. User adds new update → Create new `AccountUpdate`
-2. Update or insert today's `AccountSnapshot` for that account
-3. Recalculate portfolio total across all active accounts
-4. Update or insert today's `PortfolioSnapshot`
+**When user adds new account value update:**
+1. **Create AccountUpdate**: Store raw update with exact timestamp and value
+2. **Update AccountSnapshot**: Create or replace today's snapshot for that account with the new value
+3. **Update PortfolioSnapshot**: Recalculate today's portfolio total using all active accounts' snapshot values for today
+4. **Historical backfill** (if needed): Fill any missing daily snapshots between last snapshot and today by carrying forward previous values
+
+**Snapshot Update Rules:**
+- AccountSnapshot uses latest update value for that calendar day (regardless of time)
+- PortfolioSnapshot sums all active accounts' snapshot values for that day
+- Both snapshots use start-of-day dates as keys for consistent daily aggregation
+- Missing days are backfilled by carrying forward the most recent known values
+
+## AccountSnapshot Implementation
+
+### Complete Daily Coverage System
+The AccountSnapshot system ensures **perfect daily coverage** with zero gaps:
+
+**Key Features:**
+- **4,392+ snapshots** for 6 accounts over 2 years (732 snapshots per account)
+- **Automatic gap filling**: Every day from account creation to today has exactly one snapshot
+- **Carry-forward logic**: Days without updates use the most recent account value
+- **Performance optimized**: Charts query snapshots instead of scanning all updates
+
+### SnapshotService Implementation
+**Core Functions:**
+- `updateAccountSnapshot()`: Creates/updates daily snapshots when users add updates
+- `fillMissingSnapshots()`: Fills all gaps from account creation to specified date
+- `ensureCompleteSnapshotCoverage()`: Guarantees complete daily coverage for an account
+- `getValueForDate()`: Determines correct value for any given date using carry-forward logic
+
+**Gap Filling Logic:**
+```
+For each day from account creation to today:
+  - If user update exists for that day → use latest update value
+  - If no update exists → carry forward most recent value from previous day
+  - Result: Continuous daily snapshots with no gaps
+```
+
+### Integration Points
+**Account Creation:** `AddAccountView` calls `SnapshotService.updateAccountSnapshot()` for initial value
+**Account Updates:** `AccountDetailView` calls `SnapshotService.updateAccountSnapshot()` for new values
+**Test Data:** `TestDataGenerator` uses `ensureCompleteSnapshotCoverage()` for historical backfill
+
+### Verification & Debugging
+**Debug Tools (Development Only):**
+- `printSnapshotDebugInfo()`: Analyzes individual account coverage
+- `verifyAllAccountSnapshots()`: Comprehensive verification across all accounts
+- "Debug Snapshots" button: Real-time verification in app
+- Console logging: Shows gap filling progress during data generation
+
+**Expected Results:**
+- Each account: 730+ snapshots (one per day from creation)
+- Total system: 4,000+ snapshots across all accounts
+- Zero gaps: Continuous daily coverage verified
+- Performance: Instant chart queries using pre-aggregated data
 
 ## Architecture & Performance
 - **Pre-aggregation**: Daily snapshots provide fast chart data without scanning full history

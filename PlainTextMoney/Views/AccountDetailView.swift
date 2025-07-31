@@ -115,6 +115,9 @@ struct AccountDetailView: View {
         let update = AccountUpdate(value: value, account: account)
         modelContext.insert(update)
         
+        // Create/update account snapshot
+        SnapshotService.updateAccountSnapshot(for: account, value: value, modelContext: modelContext)
+        
         showingUpdateValue = false
         newValue = ""
     }

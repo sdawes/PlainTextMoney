@@ -17,14 +17,8 @@ struct DashboardView: View {
         NavigationStack {
             List {
                 // Portfolio Summary Section
-                Section {
+                Section("Portfolio Total") {
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Total Portfolio")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                        }
                         HStack {
                             Text("£\(totalPortfolioValue.formatted())")
                                 .font(.largeTitle)
@@ -84,6 +78,7 @@ struct DashboardView: View {
         account.updates.last?.value ?? 0
     }
     
+    
     private var totalPortfolioValue: Decimal {
         accounts.filter { $0.isActive }.reduce(0) { total, account in
             total + currentValue(for: account)
@@ -103,6 +98,20 @@ struct DashboardView: View {
     }
     
     #if DEBUG
+    private func debugSnapshots() {
+        print("\n🔍 SNAPSHOT DEBUG REPORT")
+        print("========================")
+        
+        // First show comprehensive verification
+        let _ = SnapshotService.verifyAllAccountSnapshots(accounts: accounts.filter({ $0.isActive }))
+        
+        print("\n📋 DETAILED ACCOUNT ANALYSIS:")
+        print("=============================")
+        for account in accounts.filter({ $0.isActive }) {
+            SnapshotService.printSnapshotDebugInfo(for: account)
+        }
+    }
+    
     private var debugTestDataButton: some View {
         VStack(spacing: 8) {
             Button("Load Test Data") {
@@ -122,6 +131,16 @@ struct DashboardView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color.red.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+            
+            Button("Debug Snapshots") {
+                debugSnapshots()
+            }
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.green.opacity(0.8))
             .foregroundColor(.white)
             .cornerRadius(6)
         }

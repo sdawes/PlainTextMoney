@@ -12,22 +12,53 @@ import Foundation
 class TestDataGenerator {
     
     static func generateTestData(modelContext: ModelContext) {
+        print("🚀 Starting test data generation...")
+        
         // Clear existing data first
         clearAllData(modelContext: modelContext)
         
         let accounts = createTestAccounts(modelContext: modelContext)
+        print("✅ Created \(accounts.count) test accounts")
+        
         generateHistoricalUpdates(for: accounts, modelContext: modelContext)
+        print("✅ Generated historical updates")
+        
+        // Ensure complete snapshot coverage for all accounts
+        print("🔄 Ensuring complete snapshot coverage...")
+        for account in accounts {
+            SnapshotService.ensureCompleteSnapshotCoverage(for: account, modelContext: modelContext)
+        }
+        print("✅ Complete snapshot coverage ensured")
         
         // Save context
         try? modelContext.save()
+        print("✅ Saved to database")
+        
+        // Comprehensive verification
+        print("\n🔍 Verifying snapshot coverage...")
+        let isComplete = SnapshotService.verifyAllAccountSnapshots(accounts: accounts)
+        
+        if isComplete {
+            print("🎉 Test data generation complete - Perfect snapshot coverage!\n")
+        } else {
+            print("⚠️ Test data generation complete - Some snapshots may be missing\n")
+        }
     }
     
     static func clearAllData(modelContext: ModelContext) {
-        // Fetch and delete all accounts (updates will cascade delete)
+        // Fetch and delete all accounts (updates and snapshots will cascade delete)
         let accountDescriptor = FetchDescriptor<Account>()
         if let accounts = try? modelContext.fetch(accountDescriptor) {
             for account in accounts {
                 modelContext.delete(account)
+            }
+        }
+        
+        // Also clear any orphaned snapshots
+        let snapshotDescriptor = FetchDescriptor<AccountSnapshot>()
+        if let snapshots = try? modelContext.fetch(snapshotDescriptor) {
+            for snapshot in snapshots {
+                modelContext.delete(snapshot)
             }
         }
         
@@ -60,6 +91,9 @@ class TestDataGenerator {
             let initialUpdate = AccountUpdate(value: initialValue, account: account)
             initialUpdate.date = account.createdAt
             modelContext.insert(initialUpdate)
+            
+            // Create initial snapshot
+            SnapshotService.updateAccountSnapshot(for: account, value: initialValue, date: account.createdAt, modelContext: modelContext)
         }
         
         return accounts
@@ -85,6 +119,9 @@ class TestDataGenerator {
                 let update = AccountUpdate(value: newValue, account: account)
                 update.date = currentDate.addingTimeInterval(Double.random(in: 0...86400)) // Random time during the day
                 modelContext.insert(update)
+                
+                // Create snapshot for this update
+                SnapshotService.updateAccountSnapshot(for: account, value: newValue, date: update.date, modelContext: modelContext)
             }
             
             // Move to next update period (roughly 2 weeks)

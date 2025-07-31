@@ -51,6 +51,9 @@ struct AddAccountView: View {
         let initialUpdate = AccountUpdate(value: value, account: newAccount)
         modelContext.insert(initialUpdate)
         
+        // Create initial account snapshot
+        SnapshotService.updateAccountSnapshot(for: newAccount, value: value, modelContext: modelContext)
+        
         dismiss()
     }
 }
