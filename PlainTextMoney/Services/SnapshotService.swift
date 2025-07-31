@@ -276,6 +276,13 @@ class SnapshotService {
                 if sortedSnapshots.count > 10 {
                     print("   ... and \(sortedSnapshots.count - 10) more snapshots")
                 }
+                
+                print("\n📈 Chart Data Ready:")
+                print("   Total data points for chart: \(sortedSnapshots.count)")
+                if let firstSnapshot = sortedSnapshots.first, let lastSnapshot = sortedSnapshots.last {
+                    print("   Value range: £\(firstSnapshot.value) to £\(lastSnapshot.value)")
+                    print("   Date range: \(firstSnapshot.date.formatted(date: .abbreviated, time: .omitted)) to \(lastSnapshot.date.formatted(date: .abbreviated, time: .omitted))")
+                }
             }
             
             print("===============================\n")

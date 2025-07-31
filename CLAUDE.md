@@ -4,11 +4,12 @@
 This is an iOS app built with SwiftUI and SwiftData for tracking multiple savings and investment accounts. The app is designed to be offline-first, storing all data locally for privacy and performance while providing fast, smooth charts of account and portfolio growth.
 
 ## Technology Stack
-- **Platform**: iOS
+- **Platform**: iOS 26 (using Xcode 16 Beta - Apple's new year-based versioning system)
 - **UI Framework**: SwiftUI
 - **Data Persistence**: SwiftData
-- **Development Environment**: Xcode
+- **Development Environment**: Xcode 16 Beta
 - **Language**: Swift
+- **Deployment Target**: iOS 17.0 minimum (supports iOS 26 when released)
 
 ## Key Features
 - Track multiple user-created accounts (savings, ISAs, pensions, etc.)

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Charts
 
 struct AccountDetailView: View {
     let account: Account
@@ -36,6 +37,22 @@ struct AccountDetailView: View {
                     .padding(.vertical, 8)
                 }
                 .listRowBackground(Color(.systemGray6))
+                
+                // Account Value Chart Section
+                Section("Value Chart") {
+                    VStack(spacing: 12) {
+                        AccountChart(dataPoints: chartDataPoints, interpolationMethod: .monotone)
+                            .frame(height: 200)
+                        
+                        HStack {
+                            Text("Based on \(account.snapshots.count) daily snapshots")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
                 
                 // Update History Section
                 Section("Update History") {
@@ -81,6 +98,13 @@ struct AccountDetailView: View {
     
     private var sortedUpdates: [AccountUpdate] {
         account.updates.sorted { $0.date > $1.date }
+    }
+    
+    private var chartDataPoints: [ChartDataPoint] {
+        let sortedSnapshots = account.snapshots.sorted { $0.date < $1.date }
+        return sortedSnapshots.map { snapshot in
+            ChartDataPoint(date: snapshot.date, value: snapshot.value)
+        }
     }
     
     private var updateValueSheet: some View {

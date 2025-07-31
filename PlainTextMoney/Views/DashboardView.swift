@@ -144,15 +144,6 @@ struct DashboardView: View {
             .foregroundColor(.white)
             .cornerRadius(6)
             
-            Button("Simple Test") {
-                SnapshotService.debugSimpleTestAccount(accounts: accounts)
-            }
-            .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.orange.opacity(0.8))
-            .foregroundColor(.white)
-            .cornerRadius(6)
         }
         .padding(.leading, 16)
         .padding(.bottom, 16)
