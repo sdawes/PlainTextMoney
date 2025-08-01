@@ -129,7 +129,7 @@ class TestDataGenerator {
             ("Monzo Cash ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("Monzo Savings", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("T212 Cash ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
-            ("T212 S&S ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("T212 Stocks ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL Active Savings", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL S&S ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL GSIPP", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date())
@@ -199,6 +199,16 @@ class TestDataGenerator {
                 4: 44918,  // HL Active Savings (unchanged)
                 5: 12468,  // HL S&S ISA
                 6: 75229   // HL GSIPP
+            ],
+            // 01/08/2025
+            calendar.date(from: DateComponents(year: 2025, month: 8, day: 1)) ?? Date(): [
+                0: 18669,  // Monzo Cash ISA
+                1: 38194,  // Monzo Savings
+                2: 21990,  // T212 Cash ISA
+                3: 20612,  // T212 S&S ISA
+                4: 45107,  // HL Active Savings
+                5: 12520,  // HL S&S ISA
+                6: 77570   // HL GSIPP
             ]
         ]
         
@@ -213,7 +223,7 @@ class TestDataGenerator {
                     
                     if shouldCreateUpdate {
                         let update = AccountUpdate(value: value, account: account)
-                        update.date = date.addingTimeInterval(Double(accountIndex) * 3600) // Stagger times by 1 hour
+                        update.date = date.addingTimeInterval(8 * 3600) // Set to 08:00 (8 AM)
                         modelContext.insert(update)
                         
                         // Create snapshot
