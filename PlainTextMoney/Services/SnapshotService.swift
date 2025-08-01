@@ -139,25 +139,48 @@ class SnapshotService {
         
         #if DEBUG
         print("🗑️ Deleting update for \(account.name) on \(deletionDate.formatted(date: .abbreviated, time: .omitted)) = £\(update.value)")
+        print("   Before deletion - Total updates: \(account.updates.count)")
+        print("   Before deletion - Total snapshots: \(account.snapshots.count)")
         #endif
         
-        // Delete the update first
+        // Delete the update first - ensure it's removed from the relationship too
+        if let index = account.updates.firstIndex(of: update) {
+            account.updates.remove(at: index)
+        }
         modelContext.delete(update)
         
-        // Find the date range that needs recalculation
-        let nextUpdateDate = findNextUpdateDate(after: deletionDate, in: account)
-        let endDate = nextUpdateDate ?? Date()
-        
         #if DEBUG
-        print("   Recalculating snapshots from \(deletionDate.formatted(date: .abbreviated, time: .omitted)) to \(endDate.formatted(date: .abbreviated, time: .omitted))")
+        print("   After update deletion - Total updates: \(account.updates.count)")
         #endif
         
-        // Recalculate snapshots in the affected range
-        recalculateSnapshotRange(for: account, from: deletionDate, to: endDate, modelContext: modelContext)
+        // If no updates remain, delete all snapshots
+        if account.updates.isEmpty {
+            #if DEBUG
+            print("   No updates remaining - deleting all snapshots")
+            #endif
+            
+            for snapshot in account.snapshots {
+                modelContext.delete(snapshot)
+            }
+        } else {
+            // Find the date range that needs recalculation
+            // Always recalculate from deletion date to tomorrow to ensure all snapshots are correct
+            let today = Calendar.current.startOfDay(for: Date())
+            let endDate = Calendar.current.date(byAdding: .day, value: 1, to: today) ?? Date()
+            
+            #if DEBUG
+            print("   Recalculating snapshots from \(deletionDate.formatted(date: .abbreviated, time: .omitted)) to \(endDate.formatted(date: .abbreviated, time: .omitted))")
+            print("   Today normalized: \(today.formatted(date: .abbreviated, time: .omitted))")
+            #endif
+            
+            // Recalculate snapshots in the affected range
+            recalculateSnapshotRange(for: account, from: deletionDate, to: endDate, modelContext: modelContext)
+        }
         
         do {
             try modelContext.save()
             #if DEBUG
+            print("   After save - Total snapshots: \(account.snapshots.count)")
             print("   ✅ Deletion and recalculation complete")
             #endif
         } catch {
@@ -165,12 +188,6 @@ class SnapshotService {
         }
     }
     
-    private static func findNextUpdateDate(after date: Date, in account: Account) -> Date? {
-        return account.updates
-            .filter { $0.date > date }
-            .sorted { $0.date < $1.date }
-            .first?.date
-    }
     
     private static func recalculateSnapshotRange(for account: Account, from startDate: Date, to endDate: Date, modelContext: ModelContext) {
         // Find the value to carry forward from before the deletion
@@ -606,6 +623,7 @@ class SnapshotService {
         }
     }
     
+    @MainActor
     static func recalculatePortfolioSnapshotsAsync(from startDate: Date, modelContext: ModelContext) async {
         let startDate = Calendar.current.startOfDay(for: startDate)
         let today = Calendar.current.startOfDay(for: Date())
@@ -614,74 +632,90 @@ class SnapshotService {
         print("🔄 [ASYNC] Recalculating portfolio snapshots from \(startDate.formatted(date: .abbreviated, time: .omitted)) to \(today.formatted(date: .abbreviated, time: .omitted))")
         #endif
         
-        // Perform the expensive work on a background thread
-        await Task.detached {
-            // Fetch accounts once for the entire operation
-            let accountsDescriptor = FetchDescriptor<Account>()
-            guard let allAccounts = try? modelContext.fetch(accountsDescriptor) else {
+        // Perform work on main actor to ensure ModelContext thread safety
+        // Fetch accounts once for the entire operation
+        let accountsDescriptor = FetchDescriptor<Account>()
+        guard let allAccounts = try? modelContext.fetch(accountsDescriptor) else {
+            #if DEBUG
+            print("❌ Failed to fetch accounts for portfolio recalculation")
+            #endif
+            return
+        }
+        
+        let activeAccounts = allAccounts.filter { $0.isActive }
+        
+        #if DEBUG
+        print("📋 Recalculating with \(activeAccounts.count) active accounts")
+        #endif
+        
+        // Delete existing portfolio snapshots in the affected range
+        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        if let allSnapshots = try? modelContext.fetch(portfolioDescriptor) {
+            let snapshotsToDelete = allSnapshots.filter { snapshot in
+                snapshot.date >= startDate
+            }
+            
+            #if DEBUG
+            print("🗑️ Deleting \(snapshotsToDelete.count) existing portfolio snapshots")
+            #endif
+            
+            for snapshot in snapshotsToDelete {
+                modelContext.delete(snapshot)
+            }
+        }
+        
+        // Create new snapshots with optimized calculation
+        var currentDate = startDate
+        var dayCount = 0
+        
+        // Process in chunks to avoid blocking UI for too long
+        let chunkSize = 50 // Process 50 days at a time
+        var processedDays = 0
+        
+        while currentDate <= today {
+            let chunkEndDate = min(
+                Calendar.current.date(byAdding: .day, value: chunkSize - 1, to: currentDate) ?? today,
+                today
+            )
+            
+            // Process chunk of days
+            var chunkDate = currentDate
+            while chunkDate <= chunkEndDate && chunkDate <= today {
+                let totalValue = calculatePortfolioTotalOptimized(for: chunkDate, accounts: activeAccounts)
+                let newSnapshot = PortfolioSnapshot(date: chunkDate, totalValue: totalValue)
+                modelContext.insert(newSnapshot)
+                dayCount += 1
+                
+                chunkDate = Calendar.current.date(byAdding: .day, value: 1, to: chunkDate) ?? chunkDate
+            }
+            
+            // Save chunk and yield to UI
+            do {
+                try modelContext.save()
+                processedDays += chunkSize
+                
                 #if DEBUG
-                print("❌ Failed to fetch accounts for portfolio recalculation")
+                if processedDays % 100 == 0 {
+                    print("📊 Processed \(dayCount) portfolio snapshots so far...")
+                }
+                #endif
+                
+                // Yield to let UI update
+                await Task.yield()
+                
+            } catch {
+                #if DEBUG
+                print("❌ Error saving portfolio snapshots chunk: \(error)")
                 #endif
                 return
             }
             
-            let activeAccounts = allAccounts.filter { $0.isActive }
-            
-            #if DEBUG
-            print("📋 Recalculating with \(activeAccounts.count) active accounts")
-            #endif
-            
-            // Delete existing portfolio snapshots in the affected range
-            let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
-            if let allSnapshots = try? modelContext.fetch(portfolioDescriptor) {
-                let snapshotsToDelete = allSnapshots.filter { snapshot in
-                    snapshot.date >= startDate
-                }
-                
-                #if DEBUG
-                print("🗑️ Deleting \(snapshotsToDelete.count) existing portfolio snapshots")
-                #endif
-                
-                for snapshot in snapshotsToDelete {
-                    modelContext.delete(snapshot)
-                }
-            }
-            
-            // Create new snapshots in batches for better performance
-            var newSnapshots: [PortfolioSnapshot] = []
-            var currentDate = startDate
-            var dayCount = 0
-            
-            while currentDate <= today {
-                let totalValue = calculatePortfolioTotalOptimized(for: currentDate, accounts: activeAccounts)
-                let newSnapshot = PortfolioSnapshot(date: currentDate, totalValue: totalValue)
-                newSnapshots.append(newSnapshot)
-                dayCount += 1
-                
-                currentDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
-            }
-            
-            #if DEBUG
-            print("📊 Created \(newSnapshots.count) new portfolio snapshots")
-            #endif
-            
-            // Insert all snapshots in batch
-            for snapshot in newSnapshots {
-                modelContext.insert(snapshot)
-            }
-            
-            // Save all changes at once
-            do {
-                try modelContext.save()
-                #if DEBUG
-                print("✅ [ASYNC] Portfolio snapshot recalculation complete - \(dayCount) days processed")
-                #endif
-            } catch {
-                #if DEBUG
-                print("❌ Error saving portfolio snapshots: \(error)")
-                #endif
-            }
-        }.value
+            currentDate = Calendar.current.date(byAdding: .day, value: chunkSize, to: currentDate) ?? currentDate
+        }
+        
+        #if DEBUG
+        print("✅ [ASYNC] Portfolio snapshot recalculation complete - \(dayCount) days processed")
+        #endif
     }
     
     // Optimized version that doesn't fetch accounts from database each time

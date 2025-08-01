@@ -11,43 +11,26 @@ import Foundation
 
 class TestDataGenerator {
     
+    // MARK: - Public Interface
+    
+    static func generateTestDataSet1(modelContext: ModelContext) {
+        print("🚀 Generating Test Data Set 1 (Personal Finance Data)...")
+        generateTestDataSet(.set1, modelContext: modelContext)
+    }
+    
+    static func generateTestDataSet2(modelContext: ModelContext) {
+        print("🚀 Generating Test Data Set 2 (Large Historic Data)...")
+        generateTestDataSet(.set2, modelContext: modelContext)
+    }
+    
+    static func generateTestDataSet3(modelContext: ModelContext) {
+        print("🚀 Generating Test Data Set 3 (Simple Pattern Data)...")
+        generateTestDataSet(.set3, modelContext: modelContext)
+    }
+    
+    // Legacy method for backwards compatibility
     static func generateTestData(modelContext: ModelContext) {
-        print("🚀 Starting test data generation...")
-        
-        // Clear existing data first
-        clearAllData(modelContext: modelContext)
-        
-        let accounts = createTestAccounts(modelContext: modelContext)
-        print("✅ Created \(accounts.count) test accounts")
-        
-        generateHistoricalUpdates(for: accounts, modelContext: modelContext)
-        print("✅ Generated historical updates for all accounts")
-        
-        // Ensure complete snapshot coverage for all accounts
-        print("🔄 Ensuring complete snapshot coverage...")
-        for account in accounts {
-            SnapshotService.ensureCompleteSnapshotCoverage(for: account, modelContext: modelContext)
-        }
-        print("✅ Complete snapshot coverage ensured")
-        
-        // Ensure complete portfolio snapshot coverage
-        print("🔄 Ensuring complete portfolio snapshot coverage...")
-        SnapshotService.ensurePortfolioSnapshotCoverage(modelContext: modelContext)
-        print("✅ Complete portfolio snapshot coverage ensured")
-        
-        // Save context
-        try? modelContext.save()
-        print("✅ Saved to database")
-        
-        // Comprehensive verification
-        print("\n🔍 Verifying snapshot coverage...")
-        let isComplete = SnapshotService.verifyAllAccountSnapshots(accounts: accounts)
-        
-        if isComplete {
-            print("🎉 Test data generation complete - Perfect snapshot coverage!\n")
-        } else {
-            print("⚠️ Test data generation complete - Some snapshots may be missing\n")
-        }
+        generateTestDataSet2(modelContext: modelContext)
     }
     
     static func clearAllData(modelContext: ModelContext) {
@@ -78,14 +61,217 @@ class TestDataGenerator {
         try? modelContext.save()
     }
     
-    private static func createTestAccounts(modelContext: ModelContext) -> [Account] {
+    // MARK: - Test Data Sets
+    
+    enum TestDataSet {
+        case set1  // Personal finance data (7 accounts, 5 dates)
+        case set2  // Large historic data (6 accounts, 2 years)
+        case set3  // Simple pattern data (2 accounts, predictable growth)
+    }
+    
+    private static func generateTestDataSet(_ dataSet: TestDataSet, modelContext: ModelContext) {
+        clearAllData(modelContext: modelContext)
+        
+        let accounts: [Account]
+        switch dataSet {
+        case .set1:
+            accounts = createSet1Accounts(modelContext: modelContext)
+            print("✅ Created \(accounts.count) Set 1 accounts (personal finance data)")
+            generateSet1Updates(for: accounts, modelContext: modelContext)
+            print("✅ Generated Set 1 updates")
+        case .set2:
+            accounts = createSet2Accounts(modelContext: modelContext)
+            print("✅ Created \(accounts.count) Set 2 accounts (large historic data)")
+            generateSet2Updates(for: accounts, modelContext: modelContext)
+            print("✅ Generated Set 2 historical updates")
+        case .set3:
+            accounts = createSet3Accounts(modelContext: modelContext)
+            print("✅ Created \(accounts.count) Set 3 accounts (simple patterns)")
+            generateSet3Updates(for: accounts, modelContext: modelContext)
+            print("✅ Generated Set 3 pattern updates")
+        }
+        
+        // Ensure complete snapshot coverage for all accounts
+        print("🔄 Ensuring complete snapshot coverage...")
+        for account in accounts {
+            SnapshotService.ensureCompleteSnapshotCoverage(for: account, modelContext: modelContext)
+        }
+        print("✅ Complete snapshot coverage ensured")
+        
+        // Ensure complete portfolio snapshot coverage
+        print("🔄 Ensuring complete portfolio snapshot coverage...")
+        SnapshotService.ensurePortfolioSnapshotCoverage(modelContext: modelContext)
+        print("✅ Complete portfolio snapshot coverage ensured")
+        
+        // Save context
+        try? modelContext.save()
+        print("✅ Saved to database")
+        
+        // Comprehensive verification
+        print("\n🔍 Verifying snapshot coverage...")
+        let isComplete = SnapshotService.verifyAllAccountSnapshots(accounts: accounts)
+        
+        if isComplete {
+            print("🎉 Test data generation complete - Perfect snapshot coverage!\n")
+        } else {
+            print("⚠️ Test data generation complete - Some snapshots may be missing\n")
+        }
+    }
+    
+    // MARK: - Test Data Set 1 (Personal Finance Data)
+    
+    private static func createSet1Accounts(modelContext: ModelContext) -> [Account] {
+        let calendar = Calendar.current
+        var accounts: [Account] = []
+        
+        // Create accounts with specific creation dates
+        let accountData: [(String, Date)] = [
+            ("Monzo Cash ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("Monzo Savings", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("T212 Cash ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("T212 S&S ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("HL Active Savings", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("HL S&S ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("HL GSIPP", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date())
+        ]
+        
+        for (name, createdAt) in accountData {
+            let account = Account(name: name)
+            account.createdAt = createdAt
+            modelContext.insert(account)
+            accounts.append(account)
+        }
+        
+        return accounts
+    }
+    
+    private static func generateSet1Updates(for accounts: [Account], modelContext: ModelContext) {
+        let calendar = Calendar.current
+        
+        // Data structure: [Date: [Account Index: Value]]
+        let personalData: [Date: [Int: Decimal]] = [
+            // 01/05/2025
+            calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date(): [
+                0: 18503,  // Monzo Cash ISA
+                1: 59134,  // Monzo Savings
+                2: 21763,  // T212 Cash ISA
+                3: 3695,   // T212 S&S ISA
+                4: 44620,  // HL Active Savings
+                5: 11827,  // HL S&S ISA
+                6: 68048   // HL GSIPP
+            ],
+            // 01/06/2025
+            calendar.date(from: DateComponents(year: 2025, month: 6, day: 1)) ?? Date(): [
+                0: 18564,  // Monzo Cash ISA
+                1: 59329,  // Monzo Savings
+                2: 21846,  // T212 Cash ISA
+                3: 4231,   // T212 S&S ISA
+                4: 44776,  // HL Active Savings
+                5: 12045,  // HL S&S ISA
+                6: 70900   // HL GSIPP
+            ],
+            // 26/06/2025
+            calendar.date(from: DateComponents(year: 2025, month: 6, day: 26)) ?? Date(): [
+                0: 18564,  // Monzo Cash ISA (unchanged)
+                1: 53924,  // Monzo Savings
+                2: 21903,  // T212 Cash ISA
+                3: 4286,   // T212 S&S ISA
+                4: 44776,  // HL Active Savings (unchanged)
+                5: 12243,  // HL S&S ISA
+                6: 71838   // HL GSIPP
+            ],
+            // 18/07/2025
+            calendar.date(from: DateComponents(year: 2025, month: 7, day: 18)) ?? Date(): [
+                0: 18619,  // Monzo Cash ISA
+                1: 38097,  // Monzo Savings
+                2: 21956,  // T212 Cash ISA
+                3: 20538,  // T212 S&S ISA
+                4: 44918,  // HL Active Savings
+                5: 12426,  // HL S&S ISA
+                6: 75075   // HL GSIPP
+            ],
+            // 22/07/2025
+            calendar.date(from: DateComponents(year: 2025, month: 7, day: 22)) ?? Date(): [
+                0: 18619,  // Monzo Cash ISA (unchanged)
+                1: 38097,  // Monzo Savings (unchanged)
+                2: 21966,  // T212 Cash ISA
+                3: 20529,  // T212 S&S ISA
+                4: 44918,  // HL Active Savings (unchanged)
+                5: 12468,  // HL S&S ISA
+                6: 75229   // HL GSIPP
+            ]
+        ]
+        
+        // Generate updates for each date
+        for (date, accountValues) in personalData.sorted(by: { $0.key < $1.key }) {
+            for (accountIndex, value) in accountValues {
+                if accountIndex < accounts.count {
+                    let account = accounts[accountIndex]
+                    
+                    // Only create update if value changed from previous or it's the first update
+                    let shouldCreateUpdate = account.updates.isEmpty || account.updates.last?.value != value
+                    
+                    if shouldCreateUpdate {
+                        let update = AccountUpdate(value: value, account: account)
+                        update.date = date.addingTimeInterval(Double(accountIndex) * 3600) // Stagger times by 1 hour
+                        modelContext.insert(update)
+                        
+                        // Create snapshot
+                        SnapshotService.updateAccountSnapshot(for: account, value: value, date: update.date, modelContext: modelContext)
+                        
+                        print("   \(account.name): \(date.formatted(date: .abbreviated, time: .omitted)) = £\(value)")
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Test Data Set 2 (Large Historic Data)
+    
+    private static func createSet2Accounts(modelContext: ModelContext) -> [Account] {
         let accountData: [(String, Decimal, Int)] = [
             ("ISA Savings", 5000, -24),           // 2 years ago
             ("Pension Fund", 45000, -24),         // 2 years ago  
             ("Emergency Fund", 3000, -24),        // 2 years ago
             ("Investment Account", 8000, -24),    // 2 years ago
             ("House Deposit", 15000, -24),        // 2 years ago
-            ("Crypto Portfolio", 2000, -24),      // 2 years ago
+            ("Crypto Portfolio", 2000, -24)       // 2 years ago
+        ]
+        
+        var accounts: [Account] = []
+        
+        for (name, initialValue, monthsAgo) in accountData {
+            let account = Account(name: name)
+            
+            // Set creation date
+            let calendar = Calendar.current
+            account.createdAt = calendar.date(byAdding: .month, value: monthsAgo, to: Date()) ?? Date()
+            
+            modelContext.insert(account)
+            accounts.append(account)
+            
+            // Create initial update
+            let initialUpdate = AccountUpdate(value: initialValue, account: account)
+            initialUpdate.date = account.createdAt
+            modelContext.insert(initialUpdate)
+            
+            // Create initial snapshot
+            SnapshotService.updateAccountSnapshot(for: account, value: initialValue, date: account.createdAt, modelContext: modelContext)
+        }
+        
+        return accounts
+    }
+    
+    private static func generateSet2Updates(for accounts: [Account], modelContext: ModelContext) {
+        for (index, account) in accounts.enumerated() {
+            generateRegularUpdates(for: account, accountIndex: index, modelContext: modelContext)
+        }
+    }
+    
+    // MARK: - Test Data Set 3 (Simple Pattern Data)
+    
+    private static func createSet3Accounts(modelContext: ModelContext) -> [Account] {
+        let accountData: [(String, Decimal, Int)] = [
             ("Simple Growth", 1000, -6),          // 6 months ago, predictable pattern
             ("Minimal Updates", 800, -2)          // 2 months ago, only 2 updates
         ]
@@ -114,17 +300,17 @@ class TestDataGenerator {
         return accounts
     }
     
-    private static func generateHistoricalUpdates(for accounts: [Account], modelContext: ModelContext) {
-        for (index, account) in accounts.enumerated() {
+    private static func generateSet3Updates(for accounts: [Account], modelContext: ModelContext) {
+        for account in accounts {
             if account.name == "Simple Growth" {
                 generateSimpleGrowthPattern(for: account, modelContext: modelContext)
             } else if account.name == "Minimal Updates" {
                 generateMinimalUpdates(for: account, modelContext: modelContext)
-            } else {
-                generateRegularUpdates(for: account, accountIndex: index, modelContext: modelContext)
             }
         }
     }
+    
+    // MARK: - Update Generation Methods
     
     private static func generateRegularUpdates(for account: Account, accountIndex: Int, modelContext: ModelContext) {
         let calendar = Calendar.current

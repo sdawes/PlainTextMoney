@@ -163,3 +163,119 @@ For each day from account creation to today:
 - Select target device or simulator
 - Build and run with Cmd+R
 - No external dependencies or setup required
+
+## 🚨 CRITICAL TECHNICAL DECISIONS & PERFORMANCE LESSONS
+**⚠️ NEVER UNDO THESE - LEARNED THE HARD WAY ⚠️**
+
+### SwiftData Threading Rules (MANDATORY)
+- **RULE**: SwiftData ModelContext is NOT thread-safe and must stay on original queue
+- **NEVER DO**: `Task.detached { modelContext.fetch() }` → CRASHES with "Unbinding from main queue"
+- **ALWAYS DO**: Use `@MainActor` for async SwiftData operations
+- **WHY**: Prevents "Could not cast to PersistentModel" crashes and thread safety violations
+- **IMPLEMENTATION**: All SnapshotService async methods use `@MainActor`
+
+### Portfolio Performance Architecture
+- **PROBLEM SOLVED**: Portfolio snapshots prevent expensive real-time calculations
+- **CRITICAL FIX**: Portfolio total uses smart snapshot detection - only TODAY's snapshots, fallback to real-time
+- **NEVER REVERT TO**: Always using snapshots (causes stale data during recalculation)
+- **PERFORMANCE GAIN**: Instant portfolio total updates + background historical accuracy
+
+### Async Portfolio Recalculation Strategy
+- **CHUNKED PROCESSING**: Process 50 days at a time with `await Task.yield()` between chunks
+- **WHY**: Prevents UI blocking on large historical recalculations (732+ snapshots)
+- **NEVER DO**: Single large transaction - freezes UI for seconds
+- **IMPLEMENTATION**: Save after each chunk, yield to UI, progress logging
+
+### Chart Smoothing Configuration
+- **INTERPOLATION**: Use `.monotone` for financial data (preserves trends without false peaks)
+- **ACCOUNT CHARTS**: Black line, 1.5px width, `.monotone`  
+- **PORTFOLIO CHARTS**: Blue line, 2.0px width, `.monotone`
+- **WHY**: Eliminates jagged lines from minimal account updates while maintaining data integrity
+
+### SwiftData Model Registration
+- **ALL MODELS MUST BE REGISTERED**: `[Account.self, AccountUpdate.self, AccountSnapshot.self, PortfolioSnapshot.self]`
+- **FAILURE MODE**: Silent failures in fetch/insert operations if models not registered
+- **LOCATION**: PlainTextMoneyApp.swift `.modelContainer(for: ...)`
+
+### Data Flow Performance Rules  
+- **ACCOUNT OPERATIONS**: Account changes → Account snapshots → Portfolio snapshots (all updates)
+- **DELETE OPERATIONS**: Use async portfolio recalculation to prevent UI blocking
+- **PORTFOLIO TOTAL**: Smart caching with real-time fallback for immediate responsiveness
+- **CHART DATA**: Pre-aggregated snapshots only (never raw updates for charts)
+
+### Chart Reactivity Fix (CRITICAL - DO NOT UNDO)
+**🚨 PROBLEM SOLVED**: Charts not updating after deleting historical values
+**🔧 ROOT CAUSE**: SwiftData relationship caching + incomplete snapshot deletion
+
+**MANDATORY IMPLEMENTATION**:
+1. **Use @Query for Chart Data (NOT relationships)**:
+   - `@Query private var allSnapshots: [AccountSnapshot]` in views
+   - Filter with computed property: `allSnapshots.filter { $0.account == account }`
+   - **NEVER access snapshots via**: `account.snapshots` for chart data
+   - **WHY**: @Query is reactive to database changes, relationships cache and don't auto-update UI
+
+2. **Complete Snapshot Deletion Logic**:
+   - **When deleting updates**: Always recalculate from deletion date to TODAY+1 (not just to next update)
+   - **When zero updates remain**: Delete ALL snapshots for that account
+   - **Proper relationship management**: Remove from relationship AND model context
+   - **WHY**: Prevents stale snapshots from showing outdated chart data
+
+3. **SwiftData Update Deletion Pattern**:
+   ```swift
+   // Remove from relationship first
+   if let index = account.updates.firstIndex(of: update) {
+       account.updates.remove(at: index)
+   }
+   // Then delete from context
+   modelContext.delete(update)
+   ```
+
+**SYMPTOMS OF REGRESSION**: 
+- Chart shows old values after deleting historical updates
+- Update count shows 0 but chart still displays line
+- Snapshot count doesn't match expected empty state
+
+**TESTING VERIFICATION**:
+- Load Test Set 3, delete all "Minimal Updates" values
+- Chart should show "No data available" when empty
+- Debug logs should show: `accountSnapshots.count: 0`, `Chart will show: 'No data available'`
+
+### iOS 26 Development Notes
+- **DEPLOYMENT TARGET**: iOS 17.0 minimum (NOT 26.0 - that was invalid and caused build failures)
+- **XCODE VERSION**: Xcode 16 Beta with year-based versioning system
+- **SWIFT CHARTS**: iOS 16.0+ required for chart interpolation features
+
+### Build & Simulator Issues (COMMON RECURRING PROBLEMS)
+**🚨 SYMPTOM**: Build failures with "Undefined symbols" or "Could not find or use auto-linked library" errors
+**🔧 ROOT CAUSE**: iOS 26.0 Beta SDK instability and missing SwiftData symbols in beta toolchain
+
+**SOLUTIONS (in order of preference):**
+1. **Use iOS 18.4/18.5 simulators** - Most stable option:
+   ```bash
+   xcodebuild -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.4'
+   ```
+
+2. **Clean build when switching SDK versions**:
+   ```bash
+   xcodebuild clean -project PlainTextMoney.xcodeproj -scheme PlainTextMoney
+   ```
+
+3. **SDK-specific issues to watch for**:
+   - `swift_DarwinFoundation1/2/3` library not found → SDK instability
+   - `SwiftUICore.framework` linking errors → Use older simulator OS
+   - SwiftData symbol errors → Clean build + use stable iOS version
+
+**NEVER WASTE TIME ON**: Trying to fix iOS 26.0 beta linker issues - use stable simulators instead
+
+**QUICK FIX SEQUENCE**:
+1. `xcodebuild clean`
+2. Switch to iOS 18.4 or 18.5 simulator  
+3. Build with stable SDK version
+4. Test functionality on stable platform
+
+**WHY THIS KEEPS HAPPENING**: Xcode 16 Beta defaults to iOS 26.0 which has incomplete SwiftData libraries and framework linking issues. Always verify simulator OS version before building.
+
+## Performance Monitoring
+- Debug logs show async recalculation progress
+- Portfolio verification tools available in debug builds
+- Monitor for "Unbinding from main queue" errors (indicates threading violations)

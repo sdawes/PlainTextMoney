@@ -12,6 +12,7 @@ import Charts
 struct AccountDetailView: View {
     let account: Account
     @Environment(\.modelContext) private var modelContext
+    @Query private var allSnapshots: [AccountSnapshot]
     @State private var showingUpdateValue = false
     @State private var newValue = ""
     
@@ -45,7 +46,7 @@ struct AccountDetailView: View {
                             .frame(height: 200)
                         
                         HStack {
-                            Text("Based on \(account.snapshots.count) daily snapshots")
+                            Text("Based on \(accountSnapshots.count) daily snapshots")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -100,8 +101,12 @@ struct AccountDetailView: View {
         account.updates.sorted { $0.date > $1.date }
     }
     
+    private var accountSnapshots: [AccountSnapshot] {
+        allSnapshots.filter { $0.account == account }
+    }
+    
     private var chartDataPoints: [ChartDataPoint] {
-        let sortedSnapshots = account.snapshots.sorted { $0.date < $1.date }
+        let sortedSnapshots = accountSnapshots.sorted { $0.date < $1.date }
         return sortedSnapshots.map { snapshot in
             ChartDataPoint(date: snapshot.date, value: snapshot.value)
         }

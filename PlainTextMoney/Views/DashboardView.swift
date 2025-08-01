@@ -33,6 +33,22 @@ struct DashboardView: View {
                     .padding(.vertical, 8)
                 }
                 
+                // Portfolio Value Chart Section
+                Section("Portfolio Chart") {
+                    VStack(spacing: 12) {
+                        PortfolioChart(dataPoints: portfolioChartDataPoints)
+                            .frame(height: 200)
+                        
+                        HStack {
+                            Text("Based on \(portfolioSnapshots.count) daily snapshots")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+                
                 // Accounts Section
                 Section("Accounts") {
                 ForEach(accounts, id: \.name) { account in
@@ -81,12 +97,20 @@ struct DashboardView: View {
     
     
     private var totalPortfolioValue: Decimal {
-        // Try to get the latest portfolio snapshot first
-        if let latestSnapshot = portfolioSnapshots.first {
+        // Check if we have a recent portfolio snapshot (from today)
+        let today = Calendar.current.startOfDay(for: Date())
+        let latestSnapshot = portfolioSnapshots.first
+        
+        let hasRecentSnapshot = latestSnapshot.map { snapshot in
+            Calendar.current.isDate(snapshot.date, inSameDayAs: today)
+        } ?? false
+        
+        // Use snapshot only if it's from today, otherwise calculate in real-time
+        if hasRecentSnapshot, let latestSnapshot = latestSnapshot {
             return latestSnapshot.totalValue
         }
         
-        // Fallback to real-time calculation if no snapshots exist
+        // Real-time calculation for immediate responsiveness
         return accounts.filter { $0.isActive }.reduce(0) { total, account in
             total + currentValue(for: account)
         }
@@ -94,6 +118,13 @@ struct DashboardView: View {
     
     private var activeAccountCount: Int {
         accounts.filter { $0.isActive }.count
+    }
+    
+    private var portfolioChartDataPoints: [ChartDataPoint] {
+        let sortedSnapshots = portfolioSnapshots.sorted { $0.date < $1.date }
+        return sortedSnapshots.map { snapshot in
+            ChartDataPoint(date: snapshot.date, value: snapshot.totalValue)
+        }
     }
     
     private func deleteAccounts(offsets: IndexSet) {
@@ -139,13 +170,34 @@ struct DashboardView: View {
     
     private var debugTestDataButton: some View {
         VStack(spacing: 8) {
-            Button("Load Test Data") {
-                TestDataGenerator.generateTestData(modelContext: modelContext)
+            // Test Data Loading Buttons
+            Button("Set 1 (Personal)") {
+                TestDataGenerator.generateTestDataSet1(modelContext: modelContext)
             }
             .font(.caption2)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color.blue.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+            
+            Button("Set 2 (Historic)") {
+                TestDataGenerator.generateTestDataSet2(modelContext: modelContext)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.cyan.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(6)
+            
+            Button("Set 3 (Patterns)") {
+                TestDataGenerator.generateTestDataSet3(modelContext: modelContext)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.indigo.opacity(0.8))
             .foregroundColor(.white)
             .cornerRadius(6)
             
@@ -159,6 +211,7 @@ struct DashboardView: View {
             .foregroundColor(.white)
             .cornerRadius(6)
             
+            // Debug Buttons
             Button("Debug Snapshots") {
                 debugSnapshots()
             }
