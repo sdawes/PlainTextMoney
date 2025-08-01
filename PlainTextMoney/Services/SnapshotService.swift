@@ -217,6 +217,7 @@ class SnapshotService {
         // Recreate snapshots with correct values
         var currentDate = startDate
         var snapshotsCreated = 0
+        var currentCarryForwardValue = previousValue
         
         while currentDate < endDate {
             // Check if there are any remaining updates on this specific date (after deletion)
@@ -226,16 +227,18 @@ class SnapshotService {
             
             let valueToUse: Decimal
             if let latestUpdateForDay = updatesForDate.first {
-                // Use the latest update value for this day
+                // Use the latest update value for this day and update carry-forward value
                 valueToUse = latestUpdateForDay.value
-            } else if let carryForward = previousValue {
-                // Carry forward from previous value
+                currentCarryForwardValue = latestUpdateForDay.value
+            } else if let carryForward = currentCarryForwardValue {
+                // Carry forward from current value
                 valueToUse = carryForward
             } else {
                 // Edge case: no previous value available (deleted the very first update)
                 // Look for any remaining updates in the account to get a base value
                 if let anyRemainingUpdate = account.updates.sorted(by: { $0.date < $1.date }).first {
                     valueToUse = anyRemainingUpdate.value
+                    currentCarryForwardValue = anyRemainingUpdate.value
                 } else {
                     // Truly no updates left - this shouldn't happen in normal usage
                     valueToUse = 0

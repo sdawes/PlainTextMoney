@@ -169,70 +169,46 @@ struct DashboardView: View {
     }
     
     private var debugTestDataButton: some View {
-        VStack(spacing: 8) {
-            // Test Data Loading Buttons
-            Button("Set 1 (Personal)") {
+        HStack(spacing: 6) {
+            Button("Set 1") {
                 TestDataGenerator.generateTestDataSet1(modelContext: modelContext)
             }
             .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
             .background(Color.blue.opacity(0.8))
             .foregroundColor(.white)
-            .cornerRadius(6)
+            .cornerRadius(4)
             
-            Button("Set 2 (Historic)") {
+            Button("Set 2") {
                 TestDataGenerator.generateTestDataSet2(modelContext: modelContext)
             }
             .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
             .background(Color.cyan.opacity(0.8))
             .foregroundColor(.white)
-            .cornerRadius(6)
+            .cornerRadius(4)
             
-            Button("Set 3 (Patterns)") {
+            Button("Set 3") {
                 TestDataGenerator.generateTestDataSet3(modelContext: modelContext)
             }
             .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
             .background(Color.indigo.opacity(0.8))
             .foregroundColor(.white)
-            .cornerRadius(6)
+            .cornerRadius(4)
             
-            Button("Clear All") {
+            Button("Clear") {
                 TestDataGenerator.clearAllData(modelContext: modelContext)
             }
             .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
             .background(Color.red.opacity(0.8))
             .foregroundColor(.white)
-            .cornerRadius(6)
-            
-            // Debug Buttons
-            Button("Debug Snapshots") {
-                debugSnapshots()
-            }
-            .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.green.opacity(0.8))
-            .foregroundColor(.white)
-            .cornerRadius(6)
-            
-            Button("Debug Portfolio") {
-                SnapshotService.verifyPortfolioSnapshots(modelContext: modelContext)
-                SnapshotService.debugPortfolioSnapshots(modelContext: modelContext)
-            }
-            .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.purple.opacity(0.8))
-            .foregroundColor(.white)
-            .cornerRadius(6)
-            
+            .cornerRadius(4)
         }
         .padding(.leading, 16)
         .padding(.bottom, 16)

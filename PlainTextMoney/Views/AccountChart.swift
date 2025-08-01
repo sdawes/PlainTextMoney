@@ -29,6 +29,20 @@ struct AccountChart: View {
         self.interpolationMethod = interpolationMethod
     }
     
+    private var chartDateRange: ClosedRange<Date> {
+        guard let firstDate = dataPoints.first?.date,
+              let lastDate = dataPoints.last?.date else {
+            let today = Date()
+            return today...today
+        }
+        
+        // Ensure the range always extends to today to show full context
+        let today = Calendar.current.startOfDay(for: Date())
+        let endDate = max(lastDate, today)
+        
+        return firstDate...endDate
+    }
+    
     
     var body: some View {
         if dataPoints.isEmpty {
@@ -46,7 +60,7 @@ struct AccountChart: View {
                 .interpolationMethod(interpolationMethod)
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 3)) { _ in
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                         .foregroundStyle(.gray.opacity(0.2))
                     AxisValueLabel()
@@ -54,6 +68,7 @@ struct AccountChart: View {
                         .font(.caption2)
                 }
             }
+            .chartXScale(domain: chartDateRange)
             .chartYAxis {
                 AxisMarks(values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))

@@ -240,6 +240,75 @@ For each day from account creation to today:
 - Chart should show "No data available" when empty
 - Debug logs should show: `accountSnapshots.count: 0`, `Chart will show: 'No data available'`
 
+### Snapshot Recalculation Logic Fix (CRITICAL - DO NOT UNDO)
+**🚨 PROBLEM SOLVED**: Chart spikes after deleting middle updates
+**🔧 ROOT CAUSE**: Incorrect carry-forward logic in snapshot recalculation
+
+**MANDATORY IMPLEMENTATION**:
+```swift
+// CRITICAL: Dynamic carry-forward value that updates as we encounter remaining updates
+var currentCarryForwardValue = previousValue
+
+while currentDate < endDate {
+    if let latestUpdateForDay = updatesForDate.first {
+        valueToUse = latestUpdateForDay.value
+        currentCarryForwardValue = latestUpdateForDay.value  // CRITICAL: Update carry-forward
+    } else if let carryForward = currentCarryForwardValue {
+        valueToUse = carryForward  // CRITICAL: Use current carry-forward, not original
+    }
+}
+```
+
+**WHY CRITICAL**: Without dynamic carry-forward, deleting middle updates causes:
+- Charts to show spikes (jumps to future values then back down)
+- Incorrect step-wise progression in account and portfolio charts
+- Visual confusion about account value history
+
+**TESTING VERIFICATION**:
+- Load Set 3 → Delete middle update → Chart should show smooth steps, no spikes
+- Portfolio chart should reflect accurate aggregated values without artifacts
+
+### Chart Date Range Fix (CRITICAL - DO NOT UNDO)  
+**🚨 PROBLEM SOLVED**: X-axis not showing current date when last update was months ago
+**🔧 ROOT CAUSE**: Chart date range ending at last data point instead of today
+
+**MANDATORY IMPLEMENTATION**:
+```swift
+private var chartDateRange: ClosedRange<Date> {
+    // CRITICAL: Always extend to today to show full context
+    let today = Calendar.current.startOfDay(for: Date())
+    let endDate = max(lastDate, today)
+    return firstDate...endDate
+}
+
+// CRITICAL: Apply to BOTH AccountChart and PortfolioChart
+.chartXAxis {
+    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+        // Increased from 3 to 4 to show more date labels including today
+    }
+}
+.chartXScale(domain: chartDateRange)  // CRITICAL: Force full date range
+```
+
+**WHY CRITICAL**: Shows user that account hasn't been updated recently via flat line extending to today. Missing current date creates confusion about data freshness.
+
+**TESTING VERIFICATION**:
+- When today is August but last update was May → X-axis should show "Aug"
+- Chart should show flat line from last update to today (not truncated)
+- Both account and portfolio charts should have consistent date ranges
+
+### Test Data System Organization
+**SIMPLIFIED UI**: Compact horizontal layout with 4 buttons: "Set 1", "Set 2", "Set 3", "Clear"
+
+**Data Sets**:
+- **Set 1 (Personal)**: 7 real accounts with actual finance values over 5 dates
+- **Set 2 (Historic)**: 6 synthetic accounts with 2 years of data (4000+ snapshots)  
+- **Set 3 (Patterns)**: 2 simple accounts with predictable increments for math verification
+  - Account 1: £500 increments on 1st & 15th of each month
+  - Account 2: £100 increments at 15, 35, 50, 70 days after creation
+
+**WHY ORGANIZED**: Each set tests different scenarios - realistic data, performance with large datasets, and simple predictable patterns for debugging math logic.
+
 ### iOS 26 Development Notes
 - **DEPLOYMENT TARGET**: iOS 17.0 minimum (NOT 26.0 - that was invalid and caused build failures)
 - **XCODE VERSION**: Xcode 16 Beta with year-based versioning system
