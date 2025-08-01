@@ -42,8 +42,23 @@ struct AccountDetailView: View {
                 // Account Value Chart Section
                 Section("Value Chart") {
                     VStack(spacing: 12) {
-                        AccountChart(dataPoints: chartDataPoints, interpolationMethod: .monotone)
-                            .frame(height: 200)
+                        // Current step chart
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Step Chart (All Daily Snapshots)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            AccountChart(dataPoints: chartDataPoints, interpolationMethod: .monotone)
+                                .frame(height: 200)
+                        }
+                        
+                        // New line chart with filtered data
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Line Chart (Value Changes Only)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            AccountLineChart(dataPoints: chartDataPoints)
+                                .frame(height: 200)
+                        }
                         
                         HStack {
                             Text("Based on \(accountSnapshots.count) daily snapshots")

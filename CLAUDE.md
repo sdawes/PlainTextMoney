@@ -344,7 +344,43 @@ private var chartDateRange: ClosedRange<Date> {
 
 **WHY THIS KEEPS HAPPENING**: Xcode 16 Beta defaults to iOS 26.0 which has incomplete SwiftData libraries and framework linking issues. Always verify simulator OS version before building.
 
+### Orphaned Snapshot Cleanup Fix (CRITICAL - DO NOT UNDO)
+
+**🔧 ROOT CAUSE**: When deleting early account updates while leaving middle/later ones, charts showed incorrect date ranges due to orphaned snapshots existing before the earliest remaining update.
+
+**💥 SYMPTOM**: Delete first few updates from an account, leave only middle updates → chart still starts from original account creation date with empty space until remaining updates.
+
+**✅ SOLUTION**: Enhanced `SnapshotService.deleteAccountUpdate` to include backward cleanup of orphaned snapshots.
+
+**📍 CRITICAL CODE** in `SnapshotService.swift:165-184`:
+```swift
+// First, cleanup orphaned snapshots that exist before the earliest remaining update
+let earliestRemainingUpdate = account.updates.min(by: { $0.date < $1.date })
+
+if let earliestDate = earliestRemainingUpdate?.date {
+    let earliestUpdateDate = Calendar.current.startOfDay(for: earliestDate)
+    let orphanedSnapshots = account.snapshots.filter { snapshot in
+        snapshot.date < earliestUpdateDate
+    }
+    
+    #if DEBUG
+    if !orphanedSnapshots.isEmpty {
+        print("   🧹 Cleaning up \(orphanedSnapshots.count) orphaned snapshots before \(earliestUpdateDate.formatted(date: .abbreviated, time: .omitted))")
+    }
+    #endif
+    
+    for snapshot in orphanedSnapshots {
+        modelContext.delete(snapshot)
+    }
+}
+```
+
+**🧪 VERIFICATION**: Delete early updates from Set 1 test data, leaving only middle updates → chart should only show date range for remaining updates, not from original creation date.
+
+**🚨 MUST PRESERVE**: This fix works alongside existing snapshot recalculation logic and chart date range extensions. Does not conflict with documented critical fixes.
+
 ## Performance Monitoring
 - Debug logs show async recalculation progress
 - Portfolio verification tools available in debug builds
 - Monitor for "Unbinding from main queue" errors (indicates threading violations)
+- Orphaned snapshot cleanup logs show "🧹 Cleaning up X orphaned snapshots" messages

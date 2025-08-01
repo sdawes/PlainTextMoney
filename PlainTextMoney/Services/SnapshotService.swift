@@ -163,6 +163,26 @@ class SnapshotService {
                 modelContext.delete(snapshot)
             }
         } else {
+            // First, cleanup orphaned snapshots that exist before the earliest remaining update
+            let earliestRemainingUpdate = account.updates.min(by: { $0.date < $1.date })
+            
+            if let earliestDate = earliestRemainingUpdate?.date {
+                let earliestUpdateDate = Calendar.current.startOfDay(for: earliestDate)
+                let orphanedSnapshots = account.snapshots.filter { snapshot in
+                    snapshot.date < earliestUpdateDate
+                }
+                
+                #if DEBUG
+                if !orphanedSnapshots.isEmpty {
+                    print("   🧹 Cleaning up \(orphanedSnapshots.count) orphaned snapshots before \(earliestUpdateDate.formatted(date: .abbreviated, time: .omitted))")
+                }
+                #endif
+                
+                for snapshot in orphanedSnapshots {
+                    modelContext.delete(snapshot)
+                }
+            }
+            
             // Find the date range that needs recalculation
             // Always recalculate from deletion date to tomorrow to ensure all snapshots are correct
             let today = Calendar.current.startOfDay(for: Date())

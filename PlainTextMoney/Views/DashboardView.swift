@@ -36,8 +36,23 @@ struct DashboardView: View {
                 // Portfolio Value Chart Section
                 Section("Portfolio Chart") {
                     VStack(spacing: 12) {
-                        PortfolioChart(dataPoints: portfolioChartDataPoints)
-                            .frame(height: 200)
+                        // Current step chart
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Step Chart (All Daily Snapshots)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            PortfolioChart(dataPoints: portfolioChartDataPoints)
+                                .frame(height: 200)
+                        }
+                        
+                        // New line chart with filtered data
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Line Chart (Value Changes Only)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            PortfolioLineChart(dataPoints: portfolioChartDataPoints)
+                                .frame(height: 200)
+                        }
                         
                         HStack {
                             Text("Based on \(portfolioSnapshots.count) daily snapshots")
