@@ -40,6 +40,21 @@ struct PortfolioChart: View {
                 .frame(height: height)
         } else {
             Chart(dataPoints, id: \.date) { dataPoint in
+                // Area fill under the line with light blue gradient
+                AreaMark(
+                    x: .value("Date", dataPoint.date),
+                    y: .value("Total Value", dataPoint.doubleValue)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.blue.opacity(0.3), .blue.opacity(0.05)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(interpolationMethod)
+                
+                // Main line
                 LineMark(
                     x: .value("Date", dataPoint.date),
                     y: .value("Total Value", dataPoint.doubleValue)

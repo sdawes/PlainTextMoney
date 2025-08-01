@@ -51,11 +51,26 @@ struct AccountChart: View {
                 .frame(height: height)
         } else {
             Chart(dataPoints, id: \.date) { dataPoint in
+                // Area fill under the line with light blue gradient
+                AreaMark(
+                    x: .value("Date", dataPoint.date),
+                    y: .value("Value", dataPoint.doubleValue)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.blue.opacity(0.3), .blue.opacity(0.05)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(interpolationMethod)
+                
+                // Main line
                 LineMark(
                     x: .value("Date", dataPoint.date),
                     y: .value("Value", dataPoint.doubleValue)
                 )
-                .foregroundStyle(.black)
+                .foregroundStyle(.blue)
                 .lineStyle(StrokeStyle(lineWidth: 1.5))
                 .interpolationMethod(interpolationMethod)
             }
