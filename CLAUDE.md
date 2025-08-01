@@ -186,11 +186,14 @@ For each day from account creation to today:
 - **NEVER DO**: Single large transaction - freezes UI for seconds
 - **IMPLEMENTATION**: Save after each chunk, yield to UI, progress logging
 
-### Chart Smoothing Configuration
+### Chart Visual Styling Configuration
 - **INTERPOLATION**: Use `.monotone` for financial data (preserves trends without false peaks)
-- **ACCOUNT CHARTS**: Black line, 1.5px width, `.monotone`  
-- **PORTFOLIO CHARTS**: Blue line, 2.0px width, `.monotone`
-- **WHY**: Eliminates jagged lines from minimal account updates while maintaining data integrity
+- **BOTH ACCOUNT & PORTFOLIO CHARTS**: Blue line with light blue gradient area fill
+  - Line: `.blue` color, width varies (1.5px for account, 2.0px for portfolio)
+  - Area: `LinearGradient` from `.blue.opacity(0.3)` to `.blue.opacity(0.05)`
+  - Rendering: `AreaMark` for gradient + `LineMark` for line
+- **WHY**: Provides consistent visual identity across all charts with enhanced readability
+- **CRITICAL**: Both charts use step chart behavior (NOT line charts) with visual enhancements
 
 ### SwiftData Model Registration
 - **ALL MODELS MUST BE REGISTERED**: `[Account.self, AccountUpdate.self, AccountSnapshot.self, PortfolioSnapshot.self]`
@@ -301,7 +304,10 @@ private var chartDateRange: ClosedRange<Date> {
 **SIMPLIFIED UI**: Compact horizontal layout with 4 buttons: "Set 1", "Set 2", "Set 3", "Clear"
 
 **Data Sets**:
-- **Set 1 (Personal)**: 7 real accounts with actual finance values over 5 dates
+- **Set 1 (Real Financial Data)**: 7 accounts with actual historical financial values
+  - 42 total updates across 7 accounts over 6 dates (01/05/2025 to 01/08/2025)
+  - All updates timestamped at 08:00 for consistency
+  - Real account names and values for authentic testing scenarios
 - **Set 2 (Historic)**: 6 synthetic accounts with 2 years of data (4000+ snapshots)  
 - **Set 3 (Patterns)**: 2 simple accounts with predictable increments for math verification
   - Account 1: £500 increments on 1st & 15th of each month
@@ -378,6 +384,21 @@ if let earliestDate = earliestRemainingUpdate?.date {
 **🧪 VERIFICATION**: Delete early updates from Set 1 test data, leaving only middle updates → chart should only show date range for remaining updates, not from original creation date.
 
 **🚨 MUST PRESERVE**: This fix works alongside existing snapshot recalculation logic and chart date range extensions. Does not conflict with documented critical fixes.
+
+### Chart Implementation Evolution (IMPORTANT CONTEXT)
+**🔄 REMOVED FEATURES**: Line Chart System (December 2025)
+- **WHAT WAS REMOVED**: Complete line chart implementation with filtered data points
+- **FILES DELETED**: `PortfolioLineChart.swift`, `AccountLineChart.swift`
+- **REASONING**: User feedback - preferred step chart behavior over filtered line rendering
+- **WHAT REMAINS**: Original step charts enhanced with blue styling (line + gradient area)
+- **CRITICAL**: Do NOT reimplement line charts unless explicitly requested
+
+**📊 CURRENT CHART ARCHITECTURE**:
+- **Single Chart Display**: One chart per view (not dual chart approach)
+- **Chart Types**: Step charts only with `.monotone` interpolation
+- **Visual Enhancement**: Blue lines with light blue gradient area fills applied to step charts
+- **Data Source**: Pre-aggregated snapshots for performance
+- **Reactivity**: @Query-based (not relationship-based) for reliable UI updates
 
 ## Performance Monitoring
 - Debug logs show async recalculation progress
