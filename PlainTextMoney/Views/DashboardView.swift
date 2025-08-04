@@ -66,7 +66,16 @@ struct DashboardView: View {
                                 Text("Last Updated: \(lastUpdatedDate(for: account).formatted(date: .abbreviated, time: .omitted))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                                
                                 Spacer()
+                                
+                                let change = percentageChange(for: account)
+                                if change.percentage != 0 {
+                                    Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(change.isPositive ? .green : .red)
+                                }
                             }
                         }
                         .padding(.vertical, 4)
@@ -115,6 +124,19 @@ struct DashboardView: View {
             .last
         
         return latestUpdate?.date ?? account.createdAt
+    }
+    
+    private func percentageChange(for account: Account) -> (percentage: Double, isPositive: Bool) {
+        let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+        
+        guard let firstUpdate = sortedUpdates.first,
+              let lastUpdate = sortedUpdates.last,
+              firstUpdate.value > 0 else {
+            return (0.0, true) // No change or no initial value
+        }
+        
+        let change = ((lastUpdate.value - firstUpdate.value) / firstUpdate.value) * 100
+        return (Double(truncating: change as NSNumber), change >= 0)
     }
     
     private var totalPortfolioValue: Decimal {
