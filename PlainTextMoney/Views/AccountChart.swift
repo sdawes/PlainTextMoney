@@ -77,7 +77,8 @@ struct AccountChart: View {
                 // Light gradient area underneath the line
                 AreaMark(
                     x: .value("Date", dataPoint.date),
-                    y: .value("Value", dataPoint.doubleValue)
+                    yStart: .value("Base", 0),
+                    yEnd: .value("Value", dataPoint.doubleValue)
                 )
                 .foregroundStyle(
                     LinearGradient(
