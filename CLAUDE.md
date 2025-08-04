@@ -400,8 +400,168 @@ if let earliestDate = earliestRemainingUpdate?.date {
 - **Data Source**: Pre-aggregated snapshots for performance
 - **Reactivity**: @Query-based (not relationship-based) for reliable UI updates
 
+## 🚀 SwiftData Performance Optimization Guide (CRITICAL LEARNINGS)
+
+### Performance Issues Solved & Best Practices
+
+#### 1. Portfolio Total Calculation - SIMPLIFIED APPROACH
+**❌ PROBLEM**: Complex snapshot queries for simple arithmetic
+```swift
+// BAD: Complex snapshot lookups for portfolio total
+if let latestSnapshot = latestPortfolioSnapshots.first {
+    let hasRecentSnapshot = Calendar.current.isDate(latestSnapshot.date, inSameDayAs: today)
+    if hasRecentSnapshot { return latestSnapshot.totalValue }
+}
+```
+
+**✅ SOLUTION**: Direct account value summation
+```swift
+// GOOD: Simple O(n) summation for real-time responsiveness
+private var totalPortfolioValue: Decimal {
+    return activeAccounts.reduce(0) { total, account in
+        total + currentValue(for: account)
+    }
+}
+```
+
+**💡 KEY INSIGHT**: Portfolio snapshots are for **charts only**. Portfolio totals should be **simple arithmetic** on ~8 account values.
+
+#### 2. SwiftData Query Performance Optimization
+
+**❌ PROBLEM**: Expensive predicates without limits
+```swift
+// BAD: Unbounded query that can fetch thousands of records
+let snapshotDescriptor = FetchDescriptor<AccountSnapshot>(
+    predicate: #Predicate<AccountSnapshot> { snapshot in
+        snapshot.account == account && snapshot.date <= snapshotDate
+    }
+)
+```
+
+**✅ SOLUTION**: Add fetch limits for better performance
+```swift
+// GOOD: Limited query for performance
+let snapshotDescriptor = FetchDescriptor<AccountSnapshot>(
+    predicate: #Predicate<AccountSnapshot> { snapshot in
+        snapshot.account == account && snapshot.date <= snapshotDate
+    },
+    sortBy: [SortDescriptor(\.date, order: .reverse)]
+)
+snapshotDescriptor.fetchLimit = 10  // Only need recent snapshots
+```
+
+#### 3. Chart Rendering Performance
+
+**❌ PROBLEM**: Repeated expensive calculations on every render
+```swift
+// BAD: Recalculates min/max on every SwiftUI render cycle
+private var dataMinValue: Double {
+    dataPoints.map { $0.doubleValue }.min() ?? 0
+}
+```
+
+**✅ SOLUTION**: Pre-calculate expensive values once
+```swift
+// GOOD: Cache expensive computations in init
+struct AccountChart: View {
+    private let cachedMinValue: Double
+    private let cachedMaxValue: Double
+    
+    init(dataPoints: [ChartDataPoint]) {
+        let doubleValues = dataPoints.map { $0.doubleValue }
+        self.cachedMinValue = doubleValues.min() ?? 0
+        self.cachedMaxValue = doubleValues.max() ?? 0
+    }
+}
+```
+
+#### 4. SwiftData Threading Rules (MANDATORY)
+
+**🚨 CRITICAL**: SwiftData ModelContext is NOT thread-safe
+```swift
+// ❌ NEVER DO: Causes "Unbinding from main queue" crashes
+Task.detached { 
+    modelContext.fetch(descriptor) // CRASH!
+}
+
+// ✅ ALWAYS DO: Use @MainActor for SwiftData operations
+@MainActor
+static func asyncOperation(modelContext: ModelContext) async {
+    let results = try? modelContext.fetch(descriptor) // SAFE
+}
+```
+
+#### 5. Debug Logging Performance Impact
+
+**❌ PROBLEM**: Excessive performance logging adds overhead
+```swift
+// BAD: Too many debug timers
+#if DEBUG
+PerformanceDebugger.startTimer("trivialOperation")
+// Simple operation
+PerformanceDebugger.endTimer("trivialOperation")
+#endif
+```
+
+**✅ SOLUTION**: Strategic logging for meaningful operations only
+```swift
+// GOOD: Log only complex operations
+#if DEBUG
+PerformanceDebugger.startTimer("updateAccountSnapshot - Total")
+// Complex operation
+PerformanceDebugger.endTimer("updateAccountSnapshot - Total")
+#endif
+```
+
+### Performance Architecture Pattern
+
+**📊 DATA FLOW OPTIMIZATION**:
+1. **Raw Updates**: Store user input with exact timestamps
+2. **Daily Snapshots**: Pre-aggregate for charts (filled gaps, carry-forward logic)
+3. **Portfolio Totals**: Real-time calculation from current account values
+4. **Chart Data**: Use pre-aggregated snapshots, limit to reasonable count (365 points max)
+
+### SwiftData Performance Checklist
+
+**✅ Queries**:
+- [ ] Use `fetchLimit` for queries that don't need all results
+- [ ] Sort results in query descriptor, not in Swift code
+- [ ] Use `@Query` in views, not relationship access for reactive UI
+- [ ] Avoid complex predicates when simple filtering works
+
+**✅ Threading**:
+- [ ] All SwiftData operations on main actor
+- [ ] Use `await Task.yield()` in long-running operations
+- [ ] Process large datasets in chunks (50-100 items)
+
+**✅ UI Performance**:
+- [ ] Cache expensive computations in view initializers
+- [ ] Limit chart data points to avoid rendering bottlenecks
+- [ ] Use pre-aggregated data instead of real-time calculations for display
+
+**✅ Memory Management**:
+- [ ] Delete orphaned related objects when updating relationships
+- [ ] Use cascade delete rules for data integrity
+- [ ] Monitor memory usage in debug builds
+
+### Performance Monitoring Tools Added
+
+**PerformanceDebugger.swift** - Comprehensive performance monitoring:
+- Operation timing with automatic slow operation detection
+- Memory usage tracking with high-usage alerts  
+- UI lifecycle and navigation tracking
+- SwiftData operation logging
+
+**Key Performance Metrics**:
+- ⚡ 0-50ms: Very fast
+- ✅ 50-100ms: Good
+- ⚠️ 100-200ms: Slow (needs attention)
+- 🐌 200-500ms: Very slow (optimization required)
+- 💀 500ms+: Extremely slow (critical issue)
+
 ## Performance Monitoring
 - Debug logs show async recalculation progress
 - Portfolio verification tools available in debug builds
-- Monitor for "Unbinding from main queue" errors (indicates threading violations)
+- Monitor for "Unbinding from main queue" errors (indicates threading violations)  
 - Orphaned snapshot cleanup logs show "🧹 Cleaning up X orphaned snapshots" messages
+- Performance timing logs show operation duration with emoji indicators
