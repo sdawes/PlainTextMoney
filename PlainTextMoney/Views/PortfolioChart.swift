@@ -110,7 +110,7 @@ struct PortfolioChart: View {
                     y: .value("Total Value", dataPoint.doubleValue)
                 )
                 .foregroundStyle(.blue)
-                .symbolSize(20)
+                .symbolSize(8)
             }
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 4)) { _ in

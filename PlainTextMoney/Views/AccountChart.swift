@@ -89,7 +89,7 @@ struct AccountChart: View {
                     y: .value("Value", dataPoint.doubleValue)
                 )
                 .foregroundStyle(.blue)
-                .symbolSize(30)
+                .symbolSize(8)
             }
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 4)) { _ in
