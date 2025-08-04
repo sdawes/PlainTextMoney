@@ -12,6 +12,7 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     @State private var showingAddAccount = false
+    @State private var showingPortfolioInfo = false
     
     var body: some View {
         NavigationStack {
@@ -24,9 +25,29 @@ struct DashboardView: View {
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
                             Spacer()
-                            Text("\(activeAccountCount) accounts")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("\(activeAccountCount) accounts")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                
+                                let change = portfolioPercentageChange
+                                if change.percentage != 0 {
+                                    HStack(spacing: 4) {
+                                        Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(change.isPositive ? .green : .red)
+                                        
+                                        Button(action: {
+                                            showingPortfolioInfo = true
+                                        }) {
+                                            Image(systemName: "info.circle")
+                                                .font(.caption)
+                                                .foregroundColor(.blue)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -92,6 +113,11 @@ struct DashboardView: View {
             .sheet(isPresented: $showingAddAccount) {
                 AddAccountView()
             }
+            .alert("Portfolio Performance", isPresented: $showingPortfolioInfo) {
+                Button("OK") { }
+            } message: {
+                Text("Shows portfolio performance since your most recent account was added. When you add a new account, the baseline resets to prevent artificial inflation from new money additions.")
+            }
             .overlay(alignment: .bottomLeading) {
                 #if DEBUG
                 debugTestDataButton
@@ -136,6 +162,32 @@ struct DashboardView: View {
         }
         
         let change = ((lastUpdate.value - firstUpdate.value) / firstUpdate.value) * 100
+        return (Double(truncating: change as NSNumber), change >= 0)
+    }
+    
+    private var portfolioPercentageChange: (percentage: Double, isPositive: Bool) {
+        guard !activeAccounts.isEmpty else { return (0.0, true) }
+        
+        // Find the most recent account creation date (rolling baseline)
+        let mostRecentAccountDate = activeAccounts.map { $0.createdAt }.max() ?? Date()
+        
+        // Calculate portfolio baseline value (sum of all account values at baseline date)
+        let baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            if account.createdAt <= mostRecentAccountDate {
+                // For accounts created before/at baseline, use their first update value
+                let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
+                return total + (firstUpdate?.value ?? 0)
+            } else {
+                // For accounts created after baseline (shouldn't happen), use their creation value
+                return total + 0
+            }
+        }
+        
+        let currentTotal = totalPortfolioValue
+        
+        guard baselineTotal > 0 else { return (0.0, true) }
+        
+        let change = ((currentTotal - baselineTotal) / baselineTotal) * 100
         return (Double(truncating: change as NSNumber), change >= 0)
     }
     
