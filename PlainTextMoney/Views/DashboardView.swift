@@ -63,7 +63,7 @@ struct DashboardView: View {
                                     .fontWeight(.medium)
                             }
                             HStack {
-                                Text("Created: \(account.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                                Text("Last Updated: \(lastUpdatedDate(for: account).formatted(date: .abbreviated, time: .omitted))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 Spacer()
@@ -108,6 +108,14 @@ struct DashboardView: View {
         return latestUpdate?.value ?? 0
     }
     
+    private func lastUpdatedDate(for account: Account) -> Date {
+        // Get the chronologically latest update date
+        let latestUpdate = account.updates
+            .sorted { $0.date < $1.date }
+            .last
+        
+        return latestUpdate?.date ?? account.createdAt
+    }
     
     private var totalPortfolioValue: Decimal {
         // SIMPLIFIED: Always calculate in real-time from current account values
