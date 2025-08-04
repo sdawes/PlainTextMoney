@@ -74,16 +74,30 @@ struct AccountChart: View {
                 .frame(height: height)
         } else {
             Chart(chartDataPoints, id: \.date) { dataPoint in
-                // CHANGE: Pure line chart connecting actual update points (no area fill)
+                // Light gradient area underneath the line
+                AreaMark(
+                    x: .value("Date", dataPoint.date),
+                    y: .value("Value", dataPoint.doubleValue)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.blue.opacity(0.3), .blue.opacity(0.05)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(.linear)
+                
+                // Thinner line on top of the gradient
                 LineMark(
                     x: .value("Date", dataPoint.date),
                     y: .value("Value", dataPoint.doubleValue)
                 )
                 .foregroundStyle(.blue)
-                .lineStyle(StrokeStyle(lineWidth: 2.0))
-                .interpolationMethod(.linear) // Linear interpolation for true line chart
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+                .interpolationMethod(.linear)
                 
-                // Add points to show actual update locations
+                // Small points to show actual update locations
                 PointMark(
                     x: .value("Date", dataPoint.date),
                     y: .value("Value", dataPoint.doubleValue)

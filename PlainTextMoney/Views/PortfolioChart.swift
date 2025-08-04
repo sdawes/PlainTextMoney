@@ -95,16 +95,30 @@ struct PortfolioChart: View {
                 .frame(height: height)
         } else {
             Chart(chartDataPoints, id: \.date) { dataPoint in
-                // CHANGE: Pure line chart connecting actual update points
+                // Light gradient area underneath the line
+                AreaMark(
+                    x: .value("Date", dataPoint.date),
+                    y: .value("Total Value", dataPoint.doubleValue)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.blue.opacity(0.3), .blue.opacity(0.05)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(.linear)
+                
+                // Thinner line on top of the gradient
                 LineMark(
                     x: .value("Date", dataPoint.date),
                     y: .value("Total Value", dataPoint.doubleValue)
                 )
                 .foregroundStyle(.blue)
-                .lineStyle(StrokeStyle(lineWidth: 2.5))
-                .interpolationMethod(.linear) // Linear interpolation for true line chart
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+                .interpolationMethod(.linear)
                 
-                // Add small points to show when portfolio changed
+                // Small points to show when portfolio changed
                 PointMark(
                     x: .value("Date", dataPoint.date),
                     y: .value("Total Value", dataPoint.doubleValue)
