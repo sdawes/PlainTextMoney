@@ -142,12 +142,10 @@ struct LoadingView: View {
     private func initializeModels() async {
         // Initialize model relationships and verify schema
         let accountDescriptor = FetchDescriptor<Account>()
-        let snapshotDescriptor = FetchDescriptor<AccountSnapshot>()
-        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
+        let updateDescriptor = FetchDescriptor<AccountUpdate>()
         
         _ = try? modelContainer.mainContext.fetch(accountDescriptor)
-        _ = try? modelContainer.mainContext.fetch(snapshotDescriptor)
-        _ = try? modelContainer.mainContext.fetch(portfolioDescriptor)
+        _ = try? modelContainer.mainContext.fetch(updateDescriptor)
     }
     
     private func warmUpUI() async {

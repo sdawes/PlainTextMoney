@@ -15,6 +15,7 @@ class TestDataGenerator {
     
     static func generateTestDataSet1(modelContext: ModelContext) {
         print("🚀 Generating Test Data Set 1 (Personal Finance Data)...")
+        print("📊 PERFORMANCE TEST: Using update-only chart architecture")
         generateTestDataSet(.set1, modelContext: modelContext)
     }
     
@@ -34,27 +35,11 @@ class TestDataGenerator {
     }
     
     static func clearAllData(modelContext: ModelContext) {
-        // Fetch and delete all accounts (updates and snapshots will cascade delete)
+        // Fetch and delete all accounts (updates will cascade delete)
         let accountDescriptor = FetchDescriptor<Account>()
         if let accounts = try? modelContext.fetch(accountDescriptor) {
             for account in accounts {
                 modelContext.delete(account)
-            }
-        }
-        
-        // Also clear any orphaned snapshots
-        let snapshotDescriptor = FetchDescriptor<AccountSnapshot>()
-        if let snapshots = try? modelContext.fetch(snapshotDescriptor) {
-            for snapshot in snapshots {
-                modelContext.delete(snapshot)
-            }
-        }
-        
-        // Clear all portfolio snapshots
-        let portfolioDescriptor = FetchDescriptor<PortfolioSnapshot>()
-        if let portfolioSnapshots = try? modelContext.fetch(portfolioDescriptor) {
-            for snapshot in portfolioSnapshots {
-                modelContext.delete(snapshot)
             }
         }
         
@@ -66,7 +51,7 @@ class TestDataGenerator {
     enum TestDataSet {
         case set1  // Personal finance data (7 accounts, 5 dates)
         case set2  // Large historic data (6 accounts, 2 years)
-        case set3  // Simple pattern data (2 accounts, predictable growth)
+        case set3  // Simple monthly pattern (2 accounts, £100/month for 6 months)
     }
     
     private static func generateTestDataSet(_ dataSet: TestDataSet, modelContext: ModelContext) {
@@ -91,31 +76,21 @@ class TestDataGenerator {
             print("✅ Generated Set 3 pattern updates")
         }
         
-        // Ensure complete snapshot coverage for all accounts
-        print("🔄 Ensuring complete snapshot coverage...")
-        for account in accounts {
-            SnapshotService.ensureCompleteSnapshotCoverage(for: account, modelContext: modelContext)
-        }
-        print("✅ Complete snapshot coverage ensured")
-        
-        // Ensure complete portfolio snapshot coverage
-        print("🔄 Ensuring complete portfolio snapshot coverage...")
-        SnapshotService.ensurePortfolioSnapshotCoverage(modelContext: modelContext)
-        print("✅ Complete portfolio snapshot coverage ensured")
+        // UPDATE-ONLY ARCHITECTURE: No snapshot generation needed!
+        print("✅ Using update-only charts - no snapshot generation required")
         
         // Save context
         try? modelContext.save()
         print("✅ Saved to database")
         
-        // Comprehensive verification
-        print("\n🔍 Verifying snapshot coverage...")
-        let isComplete = SnapshotService.verifyAllAccountSnapshots(accounts: accounts)
-        
-        if isComplete {
-            print("🎉 Test data generation complete - Perfect snapshot coverage!\n")
-        } else {
-            print("⚠️ Test data generation complete - Some snapshots may be missing\n")
+        // Show final summary
+        print("\n📊 Test Data Summary:")
+        for account in accounts {
+            print("   \(account.name): \(account.updates.count) updates")
         }
+        let totalUpdates = accounts.reduce(0) { $0 + $1.updates.count }
+        print("   Total updates: \(totalUpdates)")
+        print("🎉 Test data generation complete - Update-only architecture!\n")
     }
     
     // MARK: - Test Data Set 1 (Personal Finance Data)
@@ -219,15 +194,13 @@ class TestDataGenerator {
                     let account = accounts[accountIndex]
                     
                     // Only create update if value changed from previous or it's the first update
-                    let shouldCreateUpdate = account.updates.isEmpty || account.updates.last?.value != value
+                    let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
+                    let shouldCreateUpdate = account.updates.isEmpty || latestUpdate?.value != value
                     
                     if shouldCreateUpdate {
                         let update = AccountUpdate(value: value, account: account)
                         update.date = date.addingTimeInterval(8 * 3600) // Set to 08:00 (8 AM)
                         modelContext.insert(update)
-                        
-                        // Create snapshot
-                        SnapshotService.updateAccountSnapshot(for: account, value: value, date: update.date, modelContext: modelContext)
                         
                         print("   \(account.name): \(date.formatted(date: .abbreviated, time: .omitted)) = £\(value)")
                     }
@@ -264,9 +237,6 @@ class TestDataGenerator {
             let initialUpdate = AccountUpdate(value: initialValue, account: account)
             initialUpdate.date = account.createdAt
             modelContext.insert(initialUpdate)
-            
-            // Create initial snapshot
-            SnapshotService.updateAccountSnapshot(for: account, value: initialValue, date: account.createdAt, modelContext: modelContext)
         }
         
         return accounts
@@ -282,30 +252,24 @@ class TestDataGenerator {
     
     private static func createSet3Accounts(modelContext: ModelContext) -> [Account] {
         let accountData: [(String, Decimal, Int)] = [
-            ("Account 1 (£500 increments)", 1000, -4),   // 4 months ago, £500 increments on 1st & 15th
-            ("Account 2 (£100 increments)", 500, -3)     // 3 months ago, £100 increments
+            ("Account 1 (1st of month)", 0, -6),    // 6 months ago, £100 on 1st of each month
+            ("Account 2 (15th of month)", 0, -6)    // 6 months ago, £100 on 15th of each month
         ]
         
         var accounts: [Account] = []
+        let calendar = Calendar.current
         
         for (name, initialValue, monthsAgo) in accountData {
             let account = Account(name: name)
             
-            // Set creation date to start of day for consistency
-            let calendar = Calendar.current
+            // Set creation date to 6 months ago
             let creationDate = calendar.date(byAdding: .month, value: monthsAgo, to: Date()) ?? Date()
             account.createdAt = calendar.startOfDay(for: creationDate)
             
             modelContext.insert(account)
             accounts.append(account)
             
-            // Create initial update at exactly creation time
-            let initialUpdate = AccountUpdate(value: initialValue, account: account)
-            initialUpdate.date = account.createdAt.addingTimeInterval(10 * 3600) // 10 AM
-            modelContext.insert(initialUpdate)
-            
-            // Create initial snapshot
-            SnapshotService.updateAccountSnapshot(for: account, value: initialValue, date: initialUpdate.date, modelContext: modelContext)
+            print("   Created \(name) on \(account.createdAt.formatted(date: .abbreviated, time: .omitted))")
         }
         
         return accounts
@@ -314,9 +278,9 @@ class TestDataGenerator {
     private static func generateSet3Updates(for accounts: [Account], modelContext: ModelContext) {
         for account in accounts {
             if account.name.contains("Account 1") {
-                generateAccount1Pattern(for: account, modelContext: modelContext)
+                generateAccount1Pattern(for: account, modelContext: modelContext) // 1st of each month
             } else if account.name.contains("Account 2") {
-                generateAccount2Pattern(for: account, modelContext: modelContext)
+                generateAccount2Pattern(for: account, modelContext: modelContext) // 15th of each month
             }
         }
     }
@@ -344,9 +308,6 @@ class TestDataGenerator {
             update.date = currentDate.addingTimeInterval(Double.random(in: 0...86400)) // Random time during the day
             modelContext.insert(update)
             
-            // Create snapshot for this update
-            SnapshotService.updateAccountSnapshot(for: account, value: newValue, date: update.date, modelContext: modelContext)
-            
             // Move to next update period (roughly 2 weeks)
             currentDate = calendar.date(byAdding: .day, value: Int.random(in: 12...16), to: currentDate) ?? currentDate
         }
@@ -357,89 +318,76 @@ class TestDataGenerator {
         let startDate = account.createdAt
         let endDate = Date()
         
-        print("📋 Generating Account 1 pattern: £500 increments on 1st & 15th of each month")
+        print("📋 Generating Account 1 pattern: £100 on 1st of each month for 6 months")
         
-        var currentValue: Decimal = 1000 // Starting value from account creation
+        var currentValue: Decimal = 0 // Starting at £0
         var updateCount = 0
         
-        // Start from the month of account creation
+        // Start from the month after account creation
         var currentMonth = calendar.date(byAdding: .month, value: 1, to: startDate) ?? startDate
         
-        while currentMonth < endDate {
-            // Update on the 1st of the month: add £500
-            if let firstOfMonth = calendar.date(bySetting: .day, value: 1, of: currentMonth) {
-                if firstOfMonth >= startDate && firstOfMonth <= endDate {
-                    currentValue += 500 // Add £500
+        // Generate exactly 6 monthly updates
+        for monthOffset in 0..<6 {
+            let targetMonth = calendar.date(byAdding: .month, value: monthOffset, to: currentMonth) ?? currentMonth
+            
+            // Update on the 1st of the month
+            if let firstOfMonth = calendar.date(bySetting: .day, value: 1, of: targetMonth) {
+                if firstOfMonth <= endDate {
+                    currentValue += 100 // Add £100
                     
                     let update = AccountUpdate(value: currentValue, account: account)
                     update.date = firstOfMonth.addingTimeInterval(10 * 3600) // 10 AM
                     modelContext.insert(update)
-                    
-                    SnapshotService.updateAccountSnapshot(for: account, value: currentValue, date: update.date, modelContext: modelContext)
                     updateCount += 1
                     
-                    print("   \(firstOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£500)")
+                    print("   \(firstOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£100)")
                 }
             }
-            
-            // Update on the 15th of the month: add £500
-            if let fifteenthOfMonth = calendar.date(bySetting: .day, value: 15, of: currentMonth) {
-                if fifteenthOfMonth >= startDate && fifteenthOfMonth <= endDate {
-                    currentValue += 500 // Add £500
-                    
-                    let update = AccountUpdate(value: currentValue, account: account)
-                    update.date = fifteenthOfMonth.addingTimeInterval(14 * 3600) // 2 PM
-                    modelContext.insert(update)
-                    
-                    SnapshotService.updateAccountSnapshot(for: account, value: currentValue, date: update.date, modelContext: modelContext)
-                    updateCount += 1
-                    
-                    print("   \(fifteenthOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£500)")
-                }
-            }
-            
-            // Move to next month
-            currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
         }
         
-        print("   Generated \(updateCount) updates for Account 1 (£500 each)")
+        print("   Generated \(updateCount) updates for Account 1 (£100 each, total £\(currentValue))")
     }
     
     private static func generateAccount2Pattern(for account: Account, modelContext: ModelContext) {
         let calendar = Calendar.current
         let startDate = account.createdAt
+        let endDate = Date()
         
-        print("📋 Generating Account 2 pattern: Simple £100 increments")
+        print("📋 Generating Account 2 pattern: £100 on 15th of each month for 6 months")
         
-        var currentValue: Decimal = 500 // Starting value from account creation
+        var currentValue: Decimal = 0 // Starting at £0
         var updateCount = 0
         
-        // Generate 4 simple updates with £100 increments
-        let updateSchedule: [Int] = [15, 35, 50, 70] // Days after creation
+        // Start from the month after account creation
+        var currentMonth = calendar.date(byAdding: .month, value: 1, to: startDate) ?? startDate
         
-        for dayOffset in updateSchedule {
-            if let updateDate = calendar.date(byAdding: .day, value: dayOffset, to: startDate) {
-                if updateDate <= Date() {
+        // Generate exactly 6 monthly updates
+        for monthOffset in 0..<6 {
+            let targetMonth = calendar.date(byAdding: .month, value: monthOffset, to: currentMonth) ?? currentMonth
+            
+            // Update on the 15th of the month
+            if let fifteenthOfMonth = calendar.date(bySetting: .day, value: 15, of: targetMonth) {
+                if fifteenthOfMonth <= endDate {
                     currentValue += 100 // Add £100
                     
                     let update = AccountUpdate(value: currentValue, account: account)
-                    update.date = updateDate.addingTimeInterval(12 * 3600) // 12 PM
+                    update.date = fifteenthOfMonth.addingTimeInterval(14 * 3600) // 2 PM
                     modelContext.insert(update)
-                    
-                    SnapshotService.updateAccountSnapshot(for: account, value: currentValue, date: update.date, modelContext: modelContext)
                     updateCount += 1
                     
-                    print("   \(updateDate.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£100)")
+                    print("   \(fifteenthOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£100)")
                 }
             }
         }
         
-        print("   Generated \(updateCount) updates for Account 2 (£100 each)")
+        print("   Generated \(updateCount) updates for Account 2 (£100 each, total £\(currentValue))")
     }
     
     private static func calculateNextValue(for account: Account, at date: Date, accountIndex: Int) -> Decimal {
-        // Get current value (last update)
-        let currentValue = account.updates.last?.value ?? 0
+        // Get current value (chronologically latest update)
+        let currentValue = account.updates
+            .sorted { $0.date < $1.date }
+            .last?.value ?? 0
         
         // Different growth patterns for different accounts
         let growthPattern = getGrowthPattern(accountIndex: accountIndex, date: date)

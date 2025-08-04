@@ -12,7 +12,6 @@ import Charts
 struct AccountDetailView: View {
     let account: Account
     @Environment(\.modelContext) private var modelContext
-    @Query private var allSnapshots: [AccountSnapshot]
     @State private var showingUpdateValue = false
     @State private var newValue = ""
     
@@ -42,11 +41,11 @@ struct AccountDetailView: View {
                 // Account Value Chart Section
                 Section("Value Chart") {
                     VStack(spacing: 12) {
-                        AccountChart(dataPoints: chartDataPoints, interpolationMethod: .monotone)
+                        AccountChart(account: account, interpolationMethod: .linear)
                             .frame(height: 200)
                         
                         HStack {
-                            Text("Based on \(accountSnapshots.count) daily snapshots")
+                            Text("Based on \(account.updates.count) account updates")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -94,23 +93,17 @@ struct AccountDetailView: View {
     }
     
     private var currentValue: Decimal {
-        account.updates.last?.value ?? 0
+        // Get the chronologically latest update (not just the last in array)
+        account.updates
+            .sorted { $0.date < $1.date }
+            .last?.value ?? 0
     }
     
     private var sortedUpdates: [AccountUpdate] {
         account.updates.sorted { $0.date > $1.date }
     }
     
-    private var accountSnapshots: [AccountSnapshot] {
-        allSnapshots.filter { $0.account == account }
-    }
-    
-    private var chartDataPoints: [ChartDataPoint] {
-        let sortedSnapshots = accountSnapshots.sorted { $0.date < $1.date }
-        return sortedSnapshots.map { snapshot in
-            ChartDataPoint(date: snapshot.date, value: snapshot.value)
-        }
-    }
+    // SIMPLIFIED: Charts now get data directly from account updates
     
     private var updateValueSheet: some View {
         NavigationStack {
@@ -142,14 +135,23 @@ struct AccountDetailView: View {
     private func saveUpdate() {
         guard let value = Decimal(string: newValue) else { return }
         
+        #if DEBUG
+        print("💾 Saving update for \(account.name): £\(value)")
+        #endif
+        
+        // SIMPLIFIED: Just create the update - charts handle the rest automatically
         let update = AccountUpdate(value: value, account: account)
         modelContext.insert(update)
         
-        // Create/update account snapshot
-        SnapshotService.updateAccountSnapshot(for: account, value: value, modelContext: modelContext)
-        
-        // Update portfolio snapshot for today
-        SnapshotService.updatePortfolioSnapshot(modelContext: modelContext)
+        // Save to database
+        do {
+            try modelContext.save()
+            #if DEBUG
+            print("✅ Update saved successfully - account now has \(account.updates.count) updates")
+            #endif
+        } catch {
+            print("❌ Error saving update: \(error)")
+        }
         
         showingUpdateValue = false
         newValue = ""
@@ -157,27 +159,32 @@ struct AccountDetailView: View {
     
     private func deleteUpdates(offsets: IndexSet) {
         withAnimation {
-            var earliestDeletedDate: Date? = nil
+            #if DEBUG
+            print("🗑️ Deleting \(offsets.count) updates from \(account.name)")
+            #endif
             
             for index in offsets {
                 let updateToDelete = sortedUpdates[index]
                 
-                // Track the earliest deleted date for portfolio recalculation
-                if let earliest = earliestDeletedDate {
-                    earliestDeletedDate = min(earliest, updateToDelete.date)
-                } else {
-                    earliestDeletedDate = updateToDelete.date
-                }
+                #if DEBUG
+                print("   Deleting update: £\(updateToDelete.value) from \(updateToDelete.date.formatted())")
+                #endif
                 
-                // Use SnapshotService to handle deletion and snapshot recalculation
-                SnapshotService.deleteAccountUpdate(updateToDelete, from: account, modelContext: modelContext)
+                // SIMPLIFIED: Just delete the update - charts update automatically
+                if let accountIndex = account.updates.firstIndex(of: updateToDelete) {
+                    account.updates.remove(at: accountIndex)
+                }
+                modelContext.delete(updateToDelete)
             }
             
-            // Recalculate portfolio snapshots in background to avoid blocking UI
-            if let earliestDate = earliestDeletedDate {
-                Task {
-                    await SnapshotService.recalculatePortfolioSnapshotsAsync(from: earliestDate, modelContext: modelContext)
-                }
+            // Save changes
+            do {
+                try modelContext.save()
+                #if DEBUG
+                print("✅ Deletion complete - account now has \(account.updates.count) updates")
+                #endif
+            } catch {
+                print("❌ Error deleting updates: \(error)")
             }
         }
     }

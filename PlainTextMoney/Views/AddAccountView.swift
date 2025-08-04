@@ -51,11 +51,12 @@ struct AddAccountView: View {
         let initialUpdate = AccountUpdate(value: value, account: newAccount)
         modelContext.insert(initialUpdate)
         
-        // Create initial account snapshot
-        SnapshotService.updateAccountSnapshot(for: newAccount, value: value, modelContext: modelContext)
-        
-        // Update portfolio snapshot for today
-        SnapshotService.updatePortfolioSnapshot(modelContext: modelContext)
+        // Save to database
+        do {
+            try modelContext.save()
+        } catch {
+            print("Error saving account: \(error)")
+        }
         
         dismiss()
     }

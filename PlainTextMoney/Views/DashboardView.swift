@@ -11,7 +11,6 @@ import SwiftData
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
-    @Query(sort: \PortfolioSnapshot.date, order: .reverse) private var portfolioSnapshots: [PortfolioSnapshot]
     @State private var showingAddAccount = false
     
     var body: some View {
@@ -36,11 +35,12 @@ struct DashboardView: View {
                 // Portfolio Value Chart Section
                 Section("Portfolio Chart") {
                     VStack(spacing: 12) {
-                        PortfolioChart(dataPoints: portfolioChartDataPoints)
+                        PortfolioChart(accounts: accounts)
                             .frame(height: 200)
+                            .id("\(accounts.count)-\(totalUpdateCount)") // Force refresh when accounts or updates change
                         
                         HStack {
-                            Text("Based on \(portfolioSnapshots.count) daily snapshots")
+                            Text("Based on \(totalUpdateCount) account updates")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -92,82 +92,75 @@ struct DashboardView: View {
     }
     
     private func currentValue(for account: Account) -> Decimal {
-        account.updates.last?.value ?? 0
+        // Get the chronologically latest update (not just the last in array)
+        let latestUpdate = account.updates
+            .sorted { $0.date < $1.date }
+            .last
+        
+        #if DEBUG
+        if let latest = latestUpdate {
+            print("   Current value for \(account.name): £\(latest.value) from \(latest.date.formatted(date: .abbreviated, time: .standard))")
+        } else {
+            print("   Current value for \(account.name): £0 (no updates)")
+        }
+        #endif
+        
+        return latestUpdate?.value ?? 0
     }
     
     
     private var totalPortfolioValue: Decimal {
-        // Check if we have a recent portfolio snapshot (from today)
-        let today = Calendar.current.startOfDay(for: Date())
-        let latestSnapshot = portfolioSnapshots.first
-        
-        let hasRecentSnapshot = latestSnapshot.map { snapshot in
-            Calendar.current.isDate(snapshot.date, inSameDayAs: today)
-        } ?? false
-        
-        // Use snapshot only if it's from today, otherwise calculate in real-time
-        if hasRecentSnapshot, let latestSnapshot = latestSnapshot {
-            return latestSnapshot.totalValue
-        }
-        
-        // Real-time calculation for immediate responsiveness
-        return accounts.filter { $0.isActive }.reduce(0) { total, account in
+        // SIMPLIFIED: Always calculate in real-time from current account values
+        let total = activeAccounts.reduce(0) { total, account in
             total + currentValue(for: account)
         }
+        
+        #if DEBUG
+        print("💰 Portfolio total: £\(total) from \(activeAccounts.count) active accounts (total accounts: \(accounts.count))")
+        for account in activeAccounts {
+            let currentVal = currentValue(for: account)
+            print("   \(account.name): £\(currentVal) (\(account.updates.count) updates)")
+        }
+        #endif
+        
+        return total
     }
     
     private var activeAccountCount: Int {
-        accounts.filter { $0.isActive }.count
+        activeAccounts.count
     }
     
-    private var portfolioChartDataPoints: [ChartDataPoint] {
-        let sortedSnapshots = portfolioSnapshots.sorted { $0.date < $1.date }
-        return sortedSnapshots.map { snapshot in
-            ChartDataPoint(date: snapshot.date, value: snapshot.totalValue)
+    // PERFORMANCE: Cache active accounts to avoid repeated filtering
+    private var activeAccounts: [Account] {
+        accounts.filter { $0.isActive }
+    }
+    
+    private var totalUpdateCount: Int {
+        accounts.reduce(0) { total, account in
+            total + account.updates.count
         }
     }
     
     private func deleteAccounts(offsets: IndexSet) {
         withAnimation {
-            var earliestAccountDate: Date? = nil
-            
             for index in offsets {
                 let accountToDelete = accounts[index]
                 
-                // Track the earliest account creation date for portfolio recalculation
-                if let earliest = earliestAccountDate {
-                    earliestAccountDate = min(earliest, accountToDelete.createdAt)
-                } else {
-                    earliestAccountDate = accountToDelete.createdAt
-                }
-                
+                // SIMPLIFIED: Just delete the account - charts update automatically
                 modelContext.delete(accountToDelete)
             }
             
-            // Recalculate portfolio snapshots in background to avoid blocking UI
-            if let earliestDate = earliestAccountDate {
-                Task {
-                    await SnapshotService.recalculatePortfolioSnapshotsAsync(from: earliestDate, modelContext: modelContext)
-                }
+            // Save changes
+            do {
+                try modelContext.save()
+            } catch {
+                print("Error deleting accounts: \(error)")
             }
         }
     }
     
-    #if DEBUG
-    private func debugSnapshots() {
-        print("\n🔍 SNAPSHOT DEBUG REPORT")
-        print("========================")
-        
-        // First show comprehensive verification
-        let _ = SnapshotService.verifyAllAccountSnapshots(accounts: accounts.filter({ $0.isActive }))
-        
-        print("\n📋 DETAILED ACCOUNT ANALYSIS:")
-        print("=============================")
-        for account in accounts.filter({ $0.isActive }) {
-            SnapshotService.printSnapshotDebugInfo(for: account)
-        }
-    }
     
+    #if DEBUG
     private var debugTestDataButton: some View {
         HStack(spacing: 6) {
             Button("Set 1") {
