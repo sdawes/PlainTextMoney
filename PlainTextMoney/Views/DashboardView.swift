@@ -116,7 +116,7 @@ struct DashboardView: View {
             .alert("Portfolio Performance", isPresented: $showingPortfolioInfo) {
                 Button("OK") { }
             } message: {
-                Text("Shows portfolio performance since your most recent account was added. When you add a new account, the baseline resets to prevent artificial inflation from new money additions.")
+                Text("Shows total wealth growth since you started tracking. All deposits and new accounts contribute to your growth percentage.")
             }
             .overlay(alignment: .bottomLeading) {
                 #if DEBUG
@@ -168,19 +168,11 @@ struct DashboardView: View {
     private var portfolioPercentageChange: (percentage: Double, isPositive: Bool) {
         guard !activeAccounts.isEmpty else { return (0.0, true) }
         
-        // Find the most recent account creation date (rolling baseline)
-        let mostRecentAccountDate = activeAccounts.map { $0.createdAt }.max() ?? Date()
-        
-        // Calculate portfolio baseline value (sum of all account values at baseline date)
+        // Calculate portfolio baseline value (sum of all accounts' first values)
         let baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
-            if account.createdAt <= mostRecentAccountDate {
-                // For accounts created before/at baseline, use their first update value
-                let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
-                return total + (firstUpdate?.value ?? 0)
-            } else {
-                // For accounts created after baseline (shouldn't happen), use their creation value
-                return total + 0
-            }
+            // Use each account's first update value as its baseline contribution
+            let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
+            return total + (firstUpdate?.value ?? 0)
         }
         
         let currentTotal = totalPortfolioValue
