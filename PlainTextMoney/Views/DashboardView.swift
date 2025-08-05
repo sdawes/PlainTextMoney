@@ -105,9 +105,18 @@ struct DashboardView: View {
                 .onDelete(perform: deleteAccounts)
                 }
             }
+            .toolbarBackground(.regularMaterial, for: .navigationBar)
             .toolbar {
-                Button(action: { showingAddAccount = true }) {
-                    Image(systemName: "plus")
+                ToolbarItem(placement: .principal) {
+                    Text("Plain Text Wealth")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingAddAccount = true }) {
+                        Image(systemName: "plus")
+                    }
                 }
             }
             .sheet(isPresented: $showingAddAccount) {

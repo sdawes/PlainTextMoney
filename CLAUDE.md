@@ -1,406 +1,332 @@
-# 📱 Savings & Portfolio Tracker App
+# 📱 Plain Text Wealth - iOS Financial Tracker
 
-## Project Overview
-This is an iOS app built with SwiftUI and SwiftData for tracking multiple savings and investment accounts. The app is designed to be offline-first, storing all data locally for privacy and performance while providing fast, smooth charts of account and portfolio growth using real-time calculations.
+## Project Philosophy: Native-First Architecture
+This app is built using **100% native iOS technologies and patterns** - no external dependencies, no custom frameworks, just pure SwiftUI, SwiftData, and native iOS design patterns. The goal is maximum reliability, performance, and consistency with iOS ecosystem standards.
 
-## Technology Stack
-- **Platform**: iOS 26 (using Xcode 16 Beta - Apple's new year-based versioning system)
-- **UI Framework**: SwiftUI
-- **Data Persistence**: SwiftData
+## Technology Stack - Pure Native iOS
+- **Platform**: iOS 17.0+ (using Xcode 16 Beta)
+- **UI Framework**: SwiftUI (native Apple framework)
+- **Data Persistence**: SwiftData (native Apple framework) 
+- **Charts**: Swift Charts (native Apple framework)
 - **Development Environment**: Xcode 16 Beta
 - **Language**: Swift
-- **Deployment Target**: iOS 17.0 minimum (supports iOS 26 when released)
+- **Architecture**: Native iOS app lifecycle and patterns
 
-## Key Features
-- Track multiple user-created accounts (savings, ISAs, pensions, etc.)
-- Fast, smooth charts showing account and portfolio growth
-- Offline-first with local data storage
-- Account creation, value updates, and history tracking
-- Account closing (preserves history but removes from current totals)
-- Real-time calculations for optimal performance
+## Core Design Principles
 
-## 🚀 Update-Only Architecture (CORE SYSTEM)
+### 1. Native iOS Patterns Only
+- **Navigation**: Standard SwiftUI NavigationStack with native toolbar
+- **Lists**: Native SwiftUI List with standard section headers
+- **Data Flow**: SwiftUI @Query and @Model reactivity
+- **Styling**: Native iOS system fonts, colors, and materials
+- **User Interface**: Follows Apple Human Interface Guidelines
 
-### **The Simple Logic**
-This app uses an **update-only architecture** - no complex caching, no pre-calculated snapshots, just simple real-time calculations from raw user data.
+### 2. Update-Only Data Architecture
+- **No caching layers**: Direct real-time calculations from raw data
+- **No external dependencies**: Pure SwiftData relationships
+- **Simple data flow**: User updates → SwiftData storage → SwiftUI reactivity
+- **Native performance**: Leverages SwiftUI's built-in optimization
 
-**How it works:**
-1. **Store raw updates**: When users change account values, store the exact update with timestamp
-2. **Calculate current values**: Find the chronologically latest update for each account
-3. **Generate charts in real-time**: Walk through all updates chronologically to build chart data points
-4. **Portfolio totals**: Simple arithmetic - sum all active account current values
+### 3. Offline-First with Local Storage
+- **Pure SwiftData**: No cloud dependencies or syncing complexity
+- **Local privacy**: All financial data stays on device
+- **Native backup**: Leverages iOS backup and iCloud document sync
 
-**Why it's faster:**
-- **Minimal storage**: ~200-300 update records instead of 4,000+ cached snapshots
-- **No maintenance overhead**: No complex sync logic, gap filling, or cache invalidation
-- **Real-time accuracy**: Always shows correct data, never stale
-- **Simple debugging**: Easy to understand data flow and troubleshoot
+## Data Models (SwiftData - Native Apple Framework)
 
-## Data Models (SwiftData)
-
-### `Account`
-Represents each savings or investment account.
-- `name`: String - User-given name (e.g. "ISA Savings")
-- `createdAt`: Date - When the account was created
-- `isActive`: Bool - True if account is open; false if closed
-- `closedAt`: Date? - Date the account was closed, if any
-- `updates`: [AccountUpdate] - All raw updates made by user (cascade delete)
+### `Account` 
+```swift
+@Model
+class Account {
+    var name: String
+    var createdAt: Date
+    var isActive: Bool
+    var closedAt: Date?
+    
+    @Relationship(deleteRule: .cascade) 
+    var updates: [AccountUpdate] = []
+}
+```
 
 ### `AccountUpdate`
-Each time the user changes an account's value.
-- `value`: Decimal - New account value (£)
-- `date`: Date - Exact date & time when update was made
-- `account`: Account - Link to parent account
+```swift
+@Model 
+class AccountUpdate {
+    var value: Decimal        // Native precision for financial data
+    var date: Date           // Native date handling
+    var account: Account?    // Native SwiftData relationship
+}
+```
 
-**Model Registration:**
+### Model Registration (Native SwiftData Pattern)
 ```swift
 .modelContainer(for: [Account.self, AccountUpdate.self])
 ```
 
-## Real-Time Calculation System
+## Real-Time Calculation System - Native Performance
 
-### Current Value Calculation
-**Critical Implementation** - Must use chronological sorting:
+### Current Value Calculation (Native SwiftData Query)
 ```swift
 private func currentValue(for account: Account) -> Decimal {
-    // Get the chronologically latest update (not just the last in array)
+    // Native Swift sorting with proper chronological order
     account.updates
         .sorted { $0.date < $1.date }
         .last?.value ?? 0
 }
 ```
 
-**⚠️ NEVER USE**: `account.updates.last?.value` - SwiftData doesn't guarantee chronological order!
-
-### Portfolio Total Calculation
-**Simple real-time summation:**
+### Portfolio Total (Native Swift Reduce)
 ```swift
 private var totalPortfolioValue: Decimal {
-    return activeAccounts.reduce(0) { total, account in
+    activeAccounts.reduce(0) { total, account in
         total + currentValue(for: account)
     }
 }
 ```
 
-### Chart Data Generation
-
-#### Account Charts
-**Real-time calculation from updates:**
+### Chart Data Generation (Native Swift Collections)
+**Account Charts:**
 ```swift
 private var chartDataPoints: [ChartDataPoint] {
-    let sortedUpdates = account.updates.sorted { $0.date < $1.date }
-    return sortedUpdates.map { update in
-        ChartDataPoint(date: update.date, value: update.value)
-    }
+    account.updates
+        .sorted { $0.date < $1.date }
+        .map { ChartDataPoint(date: $0.date, value: $0.value) }
 }
 ```
 
-#### Portfolio Charts
-**Incremental calculation from all updates:**
+**Portfolio Charts:**
 ```swift
 private var chartDataPoints: [ChartDataPoint] {
-    // Get all updates from all active accounts, sorted chronologically
     let allUpdates = accounts.flatMap { $0.updates }
         .sorted { $0.date < $1.date }
     
-    var portfolioPoints: [ChartDataPoint] = []
-    var currentAccountValues: [String: Decimal] = [:] // Track running values
-    
-    // For each update, recalculate portfolio total incrementally
-    for update in allUpdates {
+    var currentAccountValues: [String: Decimal] = [:]
+    return allUpdates.map { update in
         currentAccountValues[update.account?.name ?? ""] = update.value
-        let portfolioTotal = currentAccountValues.values.reduce(0, +)
-        portfolioPoints.append(ChartDataPoint(date: update.date, value: portfolioTotal))
+        let total = currentAccountValues.values.reduce(0, +)
+        return ChartDataPoint(date: update.date, value: total)
     }
-    
-    return portfolioPoints
 }
 ```
 
-## Chart Implementation & Visual Styling
+## Native iOS UI Implementation
 
-### Chart Visual Configuration
-- **Chart Type**: Line charts with `.linear` interpolation
-- **Account Charts**: Blue line (1.5px width) with light blue gradient area fill
-- **Portfolio Charts**: Blue line (2.5px width) with points to show portfolio changes
-- **Date Range**: Always extends to today to show data freshness
-- **Axis Labels**: 4 automatic date marks, formatted currency values
+### Navigation Bar (Native iOS Pattern)
+```swift
+.toolbarBackground(.regularMaterial, for: .navigationBar)  // Native material
+.toolbar {
+    ToolbarItem(placement: .principal) {                    // Native centered placement
+        Text("Plain Text Wealth")
+            .font(.headline)                                // Native system font
+            .fontWeight(.semibold)                         // Native font weight
+    }
+    
+    ToolbarItem(placement: .navigationBarTrailing) {       // Native trailing placement
+        Button(action: { showingAddAccount = true }) {
+            Image(systemName: "plus")                      // Native SF Symbol
+        }
+    }
+}
+```
 
-### Chart Reactivity System
-**Enhanced reactivity for immediate updates:**
+### Navigation Behavior (Native iOS Conventions)
+- **Transparent at top**: Following iOS 15+ conventions
+- **Material background on scroll**: Native .regularMaterial provides proper contrast
+- **Automatic adaptation**: Native iOS scroll-based transparency behavior
+
+### Charts (Native Swift Charts Framework)
+```swift
+Chart(chartDataPoints, id: \.date) { dataPoint in
+    AreaMark(
+        x: .value("Date", dataPoint.date),
+        yStart: .value("Base", 0),
+        yEnd: .value("Value", dataPoint.doubleValue)
+    )
+    .foregroundStyle(
+        LinearGradient(
+            gradient: Gradient(colors: [.blue.opacity(0.3), .blue.opacity(0.05)]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    )
+    .interpolationMethod(.linear)                          // Native interpolation
+    
+    LineMark(
+        x: .value("Date", dataPoint.date),
+        y: .value("Value", dataPoint.doubleValue)
+    )
+    .foregroundStyle(.blue)                               // Native system blue
+    .lineStyle(StrokeStyle(lineWidth: 1.5))              // Native stroke style
+}
+```
+
+### List Implementation (Native SwiftUI)
+```swift
+List {
+    Section("Portfolio Total") {                          // Native section headers
+        // Content with native spacing and styling
+    }
+    
+    Section("Accounts") {
+        ForEach(accounts, id: \.name) { account in
+            NavigationLink(destination: AccountDetailView(account: account)) {
+                // Native NavigationLink behavior
+                VStack(alignment: .leading, spacing: 8) {
+                    // Native layout with system spacing
+                }
+            }
+        }
+        .onDelete(perform: deleteAccounts)               // Native swipe-to-delete
+    }
+}
+```
+
+## Data Flow - Native SwiftUI Reactivity
+
+### User Updates Data Flow
+1. **User Input**: Native SwiftUI forms and controls
+2. **SwiftData Insert**: Native `.insert()` and `.save()`  
+3. **SwiftUI Reactivity**: Native `@Query` triggers view updates
+4. **Chart Updates**: Native Swift Charts recalculates automatically
+5. **UI Refresh**: Native SwiftUI view diffing and updates
+
+### Chart Reactivity (Native SwiftUI)
 ```swift
 PortfolioChart(accounts: accounts)
-    .frame(height: 200)
-    .id("\(accounts.count)-\(totalUpdateCount)") // Force refresh when accounts or updates change
+    .id("\(accounts.count)-\(totalUpdateCount)")         // Native identity-based updates
 ```
 
-**Why this works:**
-- `accounts.count` changes when accounts are deleted/added
-- `totalUpdateCount` changes when any account is updated
-- SwiftUI recreates the chart when the ID changes
+## Performance Characteristics - Native Optimization
 
-### Chart Date Range Logic
-**Always show full context:**
-```swift
-private var chartDateRange: ClosedRange<Date> {
-    guard let firstDate = chartDataPoints.first?.date,
-          let lastDate = chartDataPoints.last?.date else {
-        let today = Date()
-        return today...today
-    }
-    
-    // Ensure the range always extends to today to show full context
-    let today = Calendar.current.startOfDay(for: Date())
-    let endDate = max(lastDate, today)
-    
-    return firstDate...endDate
-}
-```
+### Storage Efficiency
+- **Native SwiftData**: Optimized binary storage format
+- **Minimal records**: Only actual user updates (~200-300 records vs 4,000+ cached)
+- **Native relationships**: Efficient cascade deletes and queries
 
-## Data Flow & Performance
+### Calculation Performance  
+- **Native Collections**: Swift's optimized sorting and reducing
+- **O(n log n)** complexity for account values (n = ~5-50 updates per account)
+- **O(m)** complexity for portfolio totals (m = ~8 accounts)
+- **Native memory management**: ARC handles all memory automatically
 
-### Data Update Flow
-**When user adds new account value update:**
-1. **Create AccountUpdate**: Store raw update with exact timestamp and value
-2. **UI Updates Automatically**: SwiftUI reactivity triggers chart recalculation
-3. **Real-time Charts**: Charts calculate data points from all updates on-demand
+### UI Performance
+- **Native SwiftUI**: Automatic view diffing and minimal redraws
+- **Native Charts**: Hardware-accelerated rendering
+- **Native materials**: GPU-optimized background blur effects
 
-### Performance Characteristics
-**Storage Efficiency:**
-- **Old system**: 4,000+ snapshot records for 6 accounts over 2 years
-- **New system**: ~200-300 update records (only when users make changes)
-- **Reduction**: 95% less data storage required
+## User Interface - Pure iOS Native
 
-**Calculation Performance:**
-- **Account current value**: O(n log n) where n = updates per account (~5-50 updates)
-- **Portfolio total**: O(m) where m = number of accounts (~8 accounts)
-- **Chart generation**: O(n log n) where n = total updates (~200-300 updates)
-- **All operations complete in milliseconds**
+### Typography
+- **System fonts only**: `.headline`, `.subheadline`, `.caption`
+- **Native font weights**: `.semibold`, `.medium`, `.regular`
+- **No custom fonts**: Maintains iOS accessibility and consistency
 
-**Memory Usage:**
-- No cached data to manage
-- Minimal memory footprint
-- No risk of memory leaks from cached snapshots
+### Colors
+- **System colors**: `.blue`, `.green`, `.red`, `.secondary`
+- **Native adaptivity**: Automatic dark/light mode support
+- **Accessibility**: Full native high contrast and color blindness support
 
-## UI Requirements & Implementation
+### Layout
+- **Native spacing**: System-defined padding and margins
+- **Native sizing**: Automatic font scaling for accessibility
+- **Native behaviors**: Standard iOS gestures and interactions
 
-### Account Detail Views
-- **Current Value**: Calculated from chronologically latest update
-- **Update History**: Sorted by date (newest first) for user display
-- **Charts**: Generated from account's updates in real-time
-
-### Portfolio Dashboard
-- **Total Value**: Real-time summation of all active account current values
-- **Account List**: Shows current value for each account
-- **Portfolio Chart**: Calculated from all updates across all accounts
-
-### Update Display Format
-- **Full timestamps**: "27 Jul 2025, 14:30" format for all updates
-- **Chart time**: Shows dates only, not times for cleaner visualization
-- **Currency formatting**: £1,234.56 with safe number formatting for large values
-
-## Development Best Practices
-
-### SwiftData Usage
-- Use `@Model` for SwiftData entities
-- Use `Decimal` for money values (not Double) for precision
-- Store dates in UTC, format locally in UI
-- Use `@Relationship(deleteRule: .cascade)` for data integrity
-- Always sort updates by date when calculating values
-
-### Chart Implementation
-- Use `.linear` interpolation for financial data
-- Limit chart data points if performance becomes an issue (unlikely with ~300 points)
-- Cache expensive computations in chart initializers if needed
-- Use proper date ranges that extend to today
-
-### Code Organization
-- Keep calculation logic in computed properties
-- Use descriptive variable names for financial calculations
-- Add debug logging for troubleshooting value calculations
-- Follow MVVM patterns with SwiftUI
-
-## Account Management
+## Account Management - Native Patterns
 
 ### Account Lifecycle
-- **Creation**: Users create accounts with name only, add initial value as first update
-- **Updates**: Add timestamped value updates at any time
-- **History**: Full update history preserved with exact timestamps
-- **Current Value**: Always calculated from chronologically latest update
-- **Closing**: Set `isActive = false` and `closedAt` date (preserves history)
-- **Deletion**: Complete removal including all updates (cascade delete)
+- **Creation**: Standard SwiftUI form with native validation
+- **Updates**: Native date picker and numeric input
+- **History**: Native List with chronological sorting
+- **Deletion**: Native swipe-to-delete with confirmation alerts
 
-### Data Integrity
-- SwiftData relationships with cascade delete ensure no orphaned updates
-- Account closing preserves all historical data
-- Update deletion recalculates current values automatically
+### Data Integrity (Native SwiftData)
+- **Cascade relationships**: Native `@Relationship(deleteRule: .cascade)`
+- **Data validation**: Native Swift property requirements
+- **Error handling**: Native SwiftData error types and handling
 
-## Testing Strategy
+## Test Data - Realistic Financial Scenarios
 
-### Test Data Sets
-**Organized test data for different scenarios:**
+### Set 1: Real Financial Data
+- **7 accounts**: Realistic UK financial account names
+- **6 time periods**: May 2025 to August 2025
+- **Staggered timestamps**: Realistic user input patterns
+  - Initial updates: 9:00 AM with 2-minute intervals
+  - Subsequent updates: Random times between 8 AM - 8 PM
+- **42 total updates**: Authentic financial tracking scenario
 
-- **Set 1 (Real Financial Data)**: 7 accounts with actual historical financial values
-  - 42 total updates across 7 accounts over 6 dates (01/05/2025 to 01/08/2025)
-  - All updates timestamped at 08:00 for consistency
-  - Real account names and values for authentic testing scenarios
+### Set 2: Performance Testing
+- **6 accounts**: 2-year historical data
+- **200+ updates**: Tests calculation performance
+- **Synthetic growth**: Various realistic growth patterns
 
-- **Set 2 (Large Historic Data)**: 6 synthetic accounts with 2 years of data
-  - Tests performance with larger datasets (~200+ updates)
-  - Simulates long-term usage patterns
+### Set 3: Pattern Verification
+- **2 accounts**: Simple predictable patterns
+- **Monthly updates**: £100 increments for math verification
 
-- **Set 3 (Simple Patterns)**: 2 accounts with predictable increments for math verification
-  - Account 1: £100 on 1st of each month for 6 months (total £600)
-  - Account 2: £100 on 15th of each month for 6 months (total £600)
-  - Perfect for testing calculation accuracy and chart generation
+## Build & Development - Native iOS
 
-### Testing Approach
-- **Unit tests**: Data models and calculation logic
-- **UI tests**: Critical user flows (account creation, updates, charts)
-- **Performance tests**: Chart rendering with various dataset sizes
-- **Manual testing**: Use test data sets to verify calculations
+### Xcode Project Structure
+```
+PlainTextMoney/
+├── Models/              # SwiftData models
+├── Views/               # SwiftUI views  
+├── Services/            # Native Swift services
+└── TestDataGenerator    # Debug-only native test data
+```
 
-## Build & Development
+### Build Configuration
+- **Target**: iOS 17.0 minimum (maximum compatibility)
+- **Dependencies**: None (100% native)
+- **Frameworks**: SwiftUI, SwiftData, Swift Charts (all native Apple)
 
-### Build Requirements
-- Open `PlainTextMoney.xcodeproj` in Xcode
-- No external dependencies or setup required
-- Build and run with Cmd+R
+### Development Workflow
+1. **Native debugging**: Xcode native debugger and console
+2. **Native testing**: XCTest framework
+3. **Native performance**: Xcode Instruments
+4. **Native deployment**: App Store Connect
 
-### SDK Compatibility
-- **Deployment Target**: iOS 17.0 minimum
-- **Development**: Xcode 16 Beta with iOS 26 support
-- **Testing**: Use iOS 18.4 or 18.5 simulators for stability
+## Critical Technical Decisions - Native iOS Best Practices
 
-## 🚨 CRITICAL TECHNICAL DECISIONS & LESSONS LEARNED
-
-### Current Value Calculation (MANDATORY)
-**🔧 PROBLEM SOLVED**: Incorrect current values due to array order assumptions
-
-**✅ MANDATORY IMPLEMENTATION**:
+### 1. SwiftData Threading (Native Pattern)
 ```swift
-// ✅ CORRECT: Always sort by date first
-private func currentValue(for account: Account) -> Decimal {
-    account.updates
-        .sorted { $0.date < $1.date }
-        .last?.value ?? 0
-}
-
-// ❌ NEVER USE: Assumes array order
-private func currentValue(for account: Account) -> Decimal {
-    account.updates.last?.value ?? 0  // WRONG!
+@MainActor  // Native main thread enforcement
+private func updateAccount() async {
+    // All SwiftData operations on main actor - native threading pattern
 }
 ```
 
-**WHY CRITICAL**: SwiftData relationships don't guarantee chronological order. Updates could be stored in creation order, not date order.
-
-### Chart Reactivity (MANDATORY)
-**🔧 PROBLEM SOLVED**: Charts not updating when accounts deleted
-
-**✅ MANDATORY IMPLEMENTATION**:
+### 2. Financial Precision (Native Types)
 ```swift
-PortfolioChart(accounts: accounts)
-    .id("\(accounts.count)-\(totalUpdateCount)")
+var value: Decimal  // Native precise decimal type, not Double
 ```
 
-**WHY CRITICAL**: SwiftUI needs explicit identity changes to recreate charts when underlying data changes dramatically.
-
-### SwiftData Threading Rules (MANDATORY)
-- **RULE**: SwiftData ModelContext is NOT thread-safe and must stay on original queue
-- **NEVER DO**: `Task.detached { modelContext.fetch() }` → CRASHES with "Unbinding from main queue"
-- **ALWAYS DO**: Use `@MainActor` for async SwiftData operations
-- **WHY**: Prevents "Could not cast to PersistentModel" crashes and thread safety violations
-
-### Build System Stability
-**🚨 COMMON ISSUE**: Build failures with iOS 26.0 Beta SDK
-- **Symptoms**: "Undefined symbols", "Could not find swift_DarwinFoundation" errors
-- **Solution**: Use iOS 18.4 or 18.5 simulators for stable builds
-- **Quick fix**: `xcodebuild clean` + switch to stable simulator OS
-
-### Performance Architecture Pattern
-**📊 OPTIMAL DATA FLOW**:
-1. **Raw Updates**: Store user input with exact timestamps (minimal data)
-2. **Current Values**: Calculate from latest update per account (O(n log n) per account)
-3. **Portfolio Totals**: Sum current values (O(m) where m = account count)
-4. **Chart Data**: Generate from all updates chronologically (O(n log n) total)
-
-**💡 KEY INSIGHT**: With ~300 updates total, all calculations complete in milliseconds. No caching needed!
-
-## Architecture Evolution & Context
-
-### Why Update-Only Architecture?
-**Previous approach**: Complex snapshot caching system
-- 4,000+ daily snapshots pre-calculated and stored
-- 870+ lines of maintenance logic
-- Cache invalidation and sync complexity
-- Stale data risks
-
-**Current approach**: Real-time calculations
-- 200-300 raw update records
-- Simple, predictable calculations
-- Always accurate, never stale
-- 95% less storage, much simpler code
-
-### Performance Comparison
-| Metric | Old (Snapshots) | New (Updates) | Improvement |
-|--------|----------------|---------------|-------------|
-| Data Records | 4,000+ | ~300 | 93% reduction |
-| Code Lines | 1,400+ | ~500 | 64% reduction |
-| Calculation Time | Instant (cached) | <10ms (real-time) | Negligible difference |
-| Storage Size | Large | Minimal | 95% reduction |
-| Complexity | High | Low | Much simpler |
-| Accuracy Risk | Stale data possible | Always accurate | Zero risk |
-
-### Migration Benefits Achieved
-- ✅ **Simplified architecture**: Easy to understand and maintain
-- ✅ **Better performance**: Less data, faster operations
-- ✅ **Improved reliability**: No cache invalidation bugs
-- ✅ **Easier debugging**: Clear data flow, predictable calculations
-- ✅ **Future-proof**: Scales naturally with user data growth
-
-## Debug & Performance Monitoring
-
-### Debug Logging
-**Comprehensive logging for troubleshooting:**
+### 3. Date Handling (Native Foundation)
 ```swift
-#if DEBUG
-print("💰 Portfolio total: £\(total) from \(activeAccounts.count) active accounts")
-for account in activeAccounts {
-    print("   \(account.name): £\(currentValue(for: account)) (\(account.updates.count) updates)")
-}
-#endif
+Calendar.current.startOfDay(for: date)  // Native date normalization
 ```
 
-### Safe Number Formatting
-**Prevents crashes with large numbers:**
-```swift
-private func formatLargeNumber(_ value: Double) -> String {
-    if value >= 1_000_000 {
-        return String(format: "%.1fM", value / 1_000_000)
-    } else if value >= 1_000 {
-        return String(format: "%.0fk", value / 1_000)
-    } else {
-        return String(format: "%.0f", value)
-    }
-}
-```
+### 4. Memory Management (Native ARC)
+- **No retain cycles**: Native weak references in closures
+- **No manual memory**: Native ARC handles all allocation/deallocation
+- **Native lifecycle**: SwiftUI manages view lifecycle automatically
 
-### Performance Monitoring
-- All calculations complete in milliseconds
-- Memory usage stays minimal
-- No memory leaks from cached data
-- UI remains responsive during large dataset operations
+## Future Considerations - Staying Native
 
-## Data Persistence Strategy
+### Potential Native Enhancements
+1. **iCloud sync**: Native CloudKit integration (if needed)
+2. **Shortcuts**: Native Siri Shortcuts support
+3. **Widgets**: Native WidgetKit implementation
+4. **Watch app**: Native WatchKit companion
+5. **macOS**: Native Mac Catalyst deployment
 
-### Local Storage
-- All data stored locally using SwiftData
-- Raw update history maintained for full audit trail
-- No external dependencies or cloud storage required
-- Future-ready for potential iCloud sync or export features
+### Maintaining Native Purity
+- **No external dependencies**: Avoid third-party libraries
+- **No custom UI**: Use native iOS controls and behaviors
+- **No performance hacks**: Trust native framework optimization
+- **No architectural complexity**: Follow native SwiftUI patterns
 
-### Data Integrity
-- Cascade delete rules ensure no orphaned data
-- Account closing preserves all historical updates
-- Update deletion automatically recalculates dependent values
-- Real-time calculations eliminate data inconsistency risks
+## Summary
+
+This app represents a **pure native iOS implementation** using only Apple's frameworks and design patterns. Every aspect - from data storage to user interface - follows native iOS conventions, ensuring maximum reliability, performance, and user familiarity while maintaining the simplicity of a direct update-only architecture.
+
+The result is a fast, reliable financial tracking app that feels completely native to iOS users and leverages the full power of Apple's development ecosystem.
