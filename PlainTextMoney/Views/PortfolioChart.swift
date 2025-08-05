@@ -19,12 +19,6 @@ struct PortfolioChart: View {
         self.height = height
         self.interpolationMethod = interpolationMethod
         
-        #if DEBUG
-        print("🏗️ PortfolioChart init: \(accounts.count) total accounts → \(self.accounts.count) active accounts")
-        for account in self.accounts {
-            print("   Active: \(account.name) (\(account.updates.count) updates)")
-        }
-        #endif
     }
     
     // PERFORMANCE: Incremental portfolio calculation from updates only
@@ -34,9 +28,6 @@ struct PortfolioChart: View {
             .sorted { $0.date < $1.date }
         
         guard !allUpdates.isEmpty else { 
-            #if DEBUG
-            print("📊 PortfolioChart: No updates found across \(accounts.count) accounts")
-            #endif
             return [] 
         }
         
@@ -53,13 +44,6 @@ struct PortfolioChart: View {
             portfolioPoints.append(ChartDataPoint(date: update.date, value: portfolioTotal))
         }
         
-        #if DEBUG
-        print("📊 PortfolioChart: \(portfolioPoints.count) data points from \(allUpdates.count) total updates across \(accounts.count) accounts")
-        if let firstPoint = portfolioPoints.first, let lastPoint = portfolioPoints.last {
-            print("   Portfolio range: £\(firstPoint.value) to £\(lastPoint.value)")
-            print("   Date range: \(firstPoint.date.formatted(date: .abbreviated, time: .omitted)) to \(lastPoint.date.formatted(date: .abbreviated, time: .omitted))")
-        }
-        #endif
         
         return portfolioPoints
     }

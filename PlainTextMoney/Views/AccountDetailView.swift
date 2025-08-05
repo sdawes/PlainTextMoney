@@ -135,9 +135,6 @@ struct AccountDetailView: View {
     private func saveUpdate() {
         guard let value = Decimal(string: newValue) else { return }
         
-        #if DEBUG
-        print("💾 Saving update for \(account.name): £\(value)")
-        #endif
         
         // SIMPLIFIED: Just create the update - charts handle the rest automatically
         let update = AccountUpdate(value: value, account: account)
@@ -146,9 +143,6 @@ struct AccountDetailView: View {
         // Save to database
         do {
             try modelContext.save()
-            #if DEBUG
-            print("✅ Update saved successfully - account now has \(account.updates.count) updates")
-            #endif
         } catch {
             print("❌ Error saving update: \(error)")
         }
@@ -159,16 +153,10 @@ struct AccountDetailView: View {
     
     private func deleteUpdates(offsets: IndexSet) {
         withAnimation {
-            #if DEBUG
-            print("🗑️ Deleting \(offsets.count) updates from \(account.name)")
-            #endif
             
             for index in offsets {
                 let updateToDelete = sortedUpdates[index]
                 
-                #if DEBUG
-                print("   Deleting update: £\(updateToDelete.value) from \(updateToDelete.date.formatted())")
-                #endif
                 
                 // SIMPLIFIED: Just delete the update - charts update automatically
                 if let accountIndex = account.updates.firstIndex(of: updateToDelete) {
@@ -180,9 +168,6 @@ struct AccountDetailView: View {
             // Save changes
             do {
                 try modelContext.save()
-                #if DEBUG
-                print("✅ Deletion complete - account now has \(account.updates.count) updates")
-                #endif
             } catch {
                 print("❌ Error deleting updates: \(error)")
             }

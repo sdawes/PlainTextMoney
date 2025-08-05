@@ -14,18 +14,17 @@ class TestDataGenerator {
     // MARK: - Public Interface
     
     static func generateTestDataSet1(modelContext: ModelContext) {
-        print("🚀 Generating Test Data Set 1 (Personal Finance Data)...")
-        print("📊 PERFORMANCE TEST: Using update-only chart architecture")
+        print("Generating Test Data Set 1...")
         generateTestDataSet(.set1, modelContext: modelContext)
     }
     
     static func generateTestDataSet2(modelContext: ModelContext) {
-        print("🚀 Generating Test Data Set 2 (Large Historic Data)...")
+        print("Generating Test Data Set 2...")
         generateTestDataSet(.set2, modelContext: modelContext)
     }
     
     static func generateTestDataSet3(modelContext: ModelContext) {
-        print("🚀 Generating Test Data Set 3 (Simple Pattern Data)...")
+        print("Generating Test Data Set 3...")
         generateTestDataSet(.set3, modelContext: modelContext)
     }
     
@@ -49,7 +48,7 @@ class TestDataGenerator {
     // MARK: - Test Data Sets
     
     enum TestDataSet {
-        case set1  // Personal finance data (7 accounts, 5 dates)
+        case set1  // Personal finance data (8 accounts, 5 dates)
         case set2  // Large historic data (6 accounts, 2 years)
         case set3  // Simple monthly pattern (2 accounts, £100/month for 6 months)
     }
@@ -61,36 +60,20 @@ class TestDataGenerator {
         switch dataSet {
         case .set1:
             accounts = createSet1Accounts(modelContext: modelContext)
-            print("✅ Created \(accounts.count) Set 1 accounts (personal finance data)")
             generateSet1Updates(for: accounts, modelContext: modelContext)
-            print("✅ Generated Set 1 updates")
         case .set2:
             accounts = createSet2Accounts(modelContext: modelContext)
-            print("✅ Created \(accounts.count) Set 2 accounts (large historic data)")
             generateSet2Updates(for: accounts, modelContext: modelContext)
-            print("✅ Generated Set 2 historical updates")
         case .set3:
             accounts = createSet3Accounts(modelContext: modelContext)
-            print("✅ Created \(accounts.count) Set 3 accounts (simple patterns)")
             generateSet3Updates(for: accounts, modelContext: modelContext)
-            print("✅ Generated Set 3 pattern updates")
         }
-        
-        // UPDATE-ONLY ARCHITECTURE: No snapshot generation needed!
-        print("✅ Using update-only charts - no snapshot generation required")
         
         // Save context
         try? modelContext.save()
-        print("✅ Saved to database")
         
-        // Show final summary
-        print("\n📊 Test Data Summary:")
-        for account in accounts {
-            print("   \(account.name): \(account.updates.count) updates")
-        }
         let totalUpdates = accounts.reduce(0) { $0 + $1.updates.count }
-        print("   Total updates: \(totalUpdates)")
-        print("🎉 Test data generation complete - Update-only architecture!\n")
+        print("Test data generation complete: \(accounts.count) accounts, \(totalUpdates) updates")
     }
     
     // MARK: - Test Data Set 1 (Personal Finance Data)
@@ -107,7 +90,8 @@ class TestDataGenerator {
             ("T212 Stocks ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL Active Savings", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL S&S ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
-            ("HL GSIPP", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date())
+            ("HL GSIPP", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
+            ("T212 Invest", calendar.date(from: DateComponents(year: 2025, month: 8, day: 1)) ?? Date())
         ]
         
         for (name, createdAt) in accountData {
@@ -183,12 +167,15 @@ class TestDataGenerator {
                 3: 20612,  // T212 S&S ISA
                 4: 45107,  // HL Active Savings
                 5: 12520,  // HL S&S ISA
-                6: 77570   // HL GSIPP
+                6: 77570,  // HL GSIPP
+                7: 100     // T212 Invest
             ]
         ]
         
         // Generate updates for each date
         for (date, accountValues) in personalData.sorted(by: { $0.key < $1.key }) {
+            var accountsProcessedToday = 0
+            
             for (accountIndex, value) in accountValues {
                 if accountIndex < accounts.count {
                     let account = accounts[accountIndex]
@@ -199,10 +186,31 @@ class TestDataGenerator {
                     
                     if shouldCreateUpdate {
                         let update = AccountUpdate(value: value, account: account)
-                        update.date = date.addingTimeInterval(8 * 3600) // Set to 08:00 (8 AM)
-                        modelContext.insert(update)
                         
-                        print("   \(account.name): \(date.formatted(date: .abbreviated, time: .omitted)) = £\(value)")
+                        // Calculate timestamp based on whether this is initial update or subsequent
+                        let isInitialUpdate = account.updates.isEmpty
+                        let isT212Invest = account.name == "T212 Invest"
+                        
+                        if isInitialUpdate {
+                            if isT212Invest {
+                                // T212 Invest gets its own time on its creation date (08/01/2025)
+                                update.date = date.addingTimeInterval(10 * 3600 + 30 * 60) // 10:30 AM
+                            } else {
+                                // Initial updates for accounts created on 05/01/2025 are staggered
+                                let minutesOffset = TimeInterval(accountIndex * 2 * 60) // Stagger by 2 minutes each
+                                update.date = date.addingTimeInterval(9 * 3600 + minutesOffset) // Start at 09:00 AM
+                            }
+                        } else {
+                            // Subsequent updates get varied realistic times throughout the day
+                            let randomHour = Int.random(in: 8...20) // Between 8 AM and 8 PM
+                            let randomMinute = Int.random(in: 0...59)
+                            let randomSecond = Int.random(in: 0...59)
+                            let timeOffset = randomHour * 3600 + randomMinute * 60 + randomSecond
+                            update.date = date.addingTimeInterval(TimeInterval(timeOffset))
+                        }
+                        
+                        modelContext.insert(update)
+                        accountsProcessedToday += 1
                     }
                 }
             }
@@ -259,7 +267,7 @@ class TestDataGenerator {
         var accounts: [Account] = []
         let calendar = Calendar.current
         
-        for (name, initialValue, monthsAgo) in accountData {
+        for (name, _, monthsAgo) in accountData {
             let account = Account(name: name)
             
             // Set creation date to 6 months ago
@@ -269,7 +277,6 @@ class TestDataGenerator {
             modelContext.insert(account)
             accounts.append(account)
             
-            print("   Created \(name) on \(account.createdAt.formatted(date: .abbreviated, time: .omitted))")
         }
         
         return accounts
@@ -318,13 +325,12 @@ class TestDataGenerator {
         let startDate = account.createdAt
         let endDate = Date()
         
-        print("📋 Generating Account 1 pattern: £100 on 1st of each month for 6 months")
         
         var currentValue: Decimal = 0 // Starting at £0
         var updateCount = 0
         
         // Start from the month after account creation
-        var currentMonth = calendar.date(byAdding: .month, value: 1, to: startDate) ?? startDate
+        let currentMonth = calendar.date(byAdding: .month, value: 1, to: startDate) ?? startDate
         
         // Generate exactly 6 monthly updates
         for monthOffset in 0..<6 {
@@ -340,12 +346,10 @@ class TestDataGenerator {
                     modelContext.insert(update)
                     updateCount += 1
                     
-                    print("   \(firstOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£100)")
                 }
             }
         }
         
-        print("   Generated \(updateCount) updates for Account 1 (£100 each, total £\(currentValue))")
     }
     
     private static func generateAccount2Pattern(for account: Account, modelContext: ModelContext) {
@@ -353,13 +357,12 @@ class TestDataGenerator {
         let startDate = account.createdAt
         let endDate = Date()
         
-        print("📋 Generating Account 2 pattern: £100 on 15th of each month for 6 months")
         
         var currentValue: Decimal = 0 // Starting at £0
         var updateCount = 0
         
         // Start from the month after account creation
-        var currentMonth = calendar.date(byAdding: .month, value: 1, to: startDate) ?? startDate
+        let currentMonth = calendar.date(byAdding: .month, value: 1, to: startDate) ?? startDate
         
         // Generate exactly 6 monthly updates
         for monthOffset in 0..<6 {
@@ -375,12 +378,10 @@ class TestDataGenerator {
                     modelContext.insert(update)
                     updateCount += 1
                     
-                    print("   \(fifteenthOfMonth.formatted(date: .abbreviated, time: .omitted)): £\(currentValue) (+£100)")
                 }
             }
         }
         
-        print("   Generated \(updateCount) updates for Account 2 (£100 each, total £\(currentValue))")
     }
     
     private static func calculateNextValue(for account: Account, at date: Date, accountIndex: Int) -> Decimal {
@@ -427,3 +428,4 @@ class TestDataGenerator {
     
 }
 #endif
+

@@ -36,9 +36,6 @@ struct AccountChart: View {
             ChartDataPoint(date: update.date, value: update.value)
         }
         
-        #if DEBUG
-        print("📊 AccountChart for \(account.name): \(dataPoints.count) data points from \(updates.count) updates")
-        #endif
         
         return dataPoints
     }

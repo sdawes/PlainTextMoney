@@ -132,13 +132,6 @@ struct DashboardView: View {
             .sorted { $0.date < $1.date }
             .last
         
-        #if DEBUG
-        if let latest = latestUpdate {
-            print("   Current value for \(account.name): £\(latest.value) from \(latest.date.formatted(date: .abbreviated, time: .standard))")
-        } else {
-            print("   Current value for \(account.name): £0 (no updates)")
-        }
-        #endif
         
         return latestUpdate?.value ?? 0
     }
@@ -189,13 +182,6 @@ struct DashboardView: View {
             total + currentValue(for: account)
         }
         
-        #if DEBUG
-        print("💰 Portfolio total: £\(total) from \(activeAccounts.count) active accounts (total accounts: \(accounts.count))")
-        for account in activeAccounts {
-            let currentVal = currentValue(for: account)
-            print("   \(account.name): £\(currentVal) (\(account.updates.count) updates)")
-        }
-        #endif
         
         return total
     }
