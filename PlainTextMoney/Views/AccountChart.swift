@@ -47,11 +47,8 @@ struct AccountChart: View {
             return today...today
         }
         
-        // Ensure the range always extends to today to show full context
-        let today = Calendar.current.startOfDay(for: Date())
-        let endDate = max(lastDate, today)
-        
-        return firstDate...endDate
+        // Use actual data range, not extended to today
+        return firstDate...lastDate
     }
     
     private func formatLargeNumber(_ value: Double) -> String {
