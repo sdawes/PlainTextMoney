@@ -31,12 +31,18 @@ struct DashboardView: View {
                                     .foregroundColor(.secondary)
                                 
                                 let change = portfolioPercentageChange
+                                let absoluteChange = portfolioAbsoluteValueChange
                                 if change.percentage != 0 {
                                     HStack(spacing: 4) {
                                         Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
                                             .font(.subheadline)
                                             .fontWeight(.medium)
                                             .foregroundColor(change.isPositive ? .green : .red)
+                                        
+                                        Text("(\(absoluteChange.isPositive ? "" : "-")£\(abs(absoluteChange.change).formatted()))")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(absoluteChange.isPositive ? .green : .red)
                                         
                                         Button(action: {
                                             showingPortfolioInfo = true
@@ -204,6 +210,20 @@ struct DashboardView: View {
         
         let change = ((currentTotal - baselineTotal) / baselineTotal) * 100
         return (Double(truncating: change as NSNumber), change >= 0)
+    }
+    
+    private var portfolioAbsoluteValueChange: (change: Decimal, isPositive: Bool) {
+        guard !activeAccounts.isEmpty else { return (0, true) }
+        
+        // Calculate initial portfolio value (sum of all accounts' first update values)
+        let initialTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
+            return total + (firstUpdate?.value ?? 0)
+        }
+        
+        let currentTotal = totalPortfolioValue
+        let absoluteChange = currentTotal - initialTotal
+        return (absoluteChange, absoluteChange >= 0)
     }
     
     private var totalPortfolioValue: Decimal {
