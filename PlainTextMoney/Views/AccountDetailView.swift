@@ -14,6 +14,7 @@ struct AccountDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showingUpdateValue = false
     @State private var newValue = ""
+    @State private var validationError = ""
     
     var body: some View {
         NavigationStack {
@@ -111,6 +112,15 @@ struct AccountDetailView: View {
                 Section("New Value") {
                     TextField("Enter new value", text: $newValue)
                         .keyboardType(.decimalPad)
+                        .onChange(of: newValue) { oldValue, newValue in
+                            validateInput(newValue)
+                        }
+                    
+                    if !validationError.isEmpty {
+                        Text(validationError)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                 }
             }
             .navigationTitle("Update Value")
@@ -120,35 +130,61 @@ struct AccountDetailView: View {
                     Button("Cancel") {
                         showingUpdateValue = false
                         newValue = ""
+                        validationError = ""
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveUpdate()
                     }
-                    .disabled(newValue.isEmpty)
+                    .disabled(!isValidToSave)
                 }
             }
         }
     }
     
-    private func saveUpdate() {
-        guard let value = Decimal(string: newValue) else { return }
-        
-        
-        // SIMPLIFIED: Just create the update - charts handle the rest automatically
-        let update = AccountUpdate(value: value, account: account)
-        modelContext.insert(update)
-        
-        // Save to database
-        do {
-            try modelContext.save()
-        } catch {
-            print("❌ Error saving update: \(error)")
+    private var isValidToSave: Bool {
+        if newValue.isEmpty {
+            return false
         }
         
-        showingUpdateValue = false
-        newValue = ""
+        if case .valid = InputValidator.validateMonetaryInput(newValue) {
+            return true
+        }
+        return false
+    }
+    
+    private func validateInput(_ input: String) {
+        switch InputValidator.validateMonetaryInput(input) {
+        case .valid:
+            validationError = ""
+        case .invalid(let error):
+            validationError = error
+        }
+    }
+    
+    private func saveUpdate() {
+        // Use validated value from InputValidator
+        switch InputValidator.validateMonetaryInput(newValue) {
+        case .valid(let value):
+            // SIMPLIFIED: Just create the update - charts handle the rest automatically
+            let update = AccountUpdate(value: value, account: account)
+            modelContext.insert(update)
+            
+            // Save to database
+            do {
+                try modelContext.save()
+            } catch {
+                print("❌ Error saving update: \(error)")
+            }
+            
+            showingUpdateValue = false
+            newValue = ""
+            validationError = ""
+        case .invalid:
+            // This shouldn't happen as button is disabled when invalid
+            return
+        }
     }
     
     private func deleteUpdates(offsets: IndexSet) {

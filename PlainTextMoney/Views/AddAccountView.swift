@@ -14,6 +14,7 @@ struct AddAccountView: View {
     
     @State private var accountName = ""
     @State private var initialValue = ""
+    @State private var validationError = ""
     
     var body: some View {
         NavigationStack {
@@ -22,6 +23,15 @@ struct AddAccountView: View {
                     TextField("Account name", text: $accountName)
                     TextField("Initial value", text: $initialValue)
                         .keyboardType(.decimalPad)
+                        .onChange(of: initialValue) { oldValue, newValue in
+                            validateInput(newValue)
+                        }
+                    
+                    if !validationError.isEmpty {
+                        Text(validationError)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                 }
             }
             .navigationTitle("Add Account")
@@ -36,28 +46,53 @@ struct AddAccountView: View {
                     Button("Save") {
                         saveAccount()
                     }
-                    .disabled(accountName.isEmpty || initialValue.isEmpty)
+                    .disabled(!isValidToSave)
                 }
             }
         }
     }
     
-    private func saveAccount() {
-        guard let value = Decimal(string: initialValue) else { return }
-        
-        let newAccount = Account(name: accountName)
-        modelContext.insert(newAccount)
-        
-        let initialUpdate = AccountUpdate(value: value, account: newAccount)
-        modelContext.insert(initialUpdate)
-        
-        // Save to database
-        do {
-            try modelContext.save()
-        } catch {
-            print("Error saving account: \(error)")
+    private var isValidToSave: Bool {
+        if accountName.isEmpty || initialValue.isEmpty {
+            return false
         }
         
-        dismiss()
+        if case .valid = InputValidator.validateMonetaryInput(initialValue) {
+            return true
+        }
+        return false
+    }
+    
+    private func validateInput(_ input: String) {
+        switch InputValidator.validateMonetaryInput(input) {
+        case .valid:
+            validationError = ""
+        case .invalid(let error):
+            validationError = error
+        }
+    }
+    
+    private func saveAccount() {
+        // Use validated value from InputValidator
+        switch InputValidator.validateMonetaryInput(initialValue) {
+        case .valid(let value):
+            let newAccount = Account(name: accountName)
+            modelContext.insert(newAccount)
+            
+            let initialUpdate = AccountUpdate(value: value, account: newAccount)
+            modelContext.insert(initialUpdate)
+            
+            // Save to database
+            do {
+                try modelContext.save()
+            } catch {
+                print("Error saving account: \(error)")
+            }
+            
+            dismiss()
+        case .invalid:
+            // This shouldn't happen as button is disabled when invalid
+            return
+        }
     }
 }

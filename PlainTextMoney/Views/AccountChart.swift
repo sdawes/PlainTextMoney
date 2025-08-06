@@ -79,7 +79,7 @@ struct AccountChart: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        gradient: Gradient(colors: [.blue.opacity(0.3), .blue.opacity(0.05)]),
+                        gradient: Gradient(colors: [.green.opacity(0.3), .green.opacity(0.05)]),
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -91,7 +91,7 @@ struct AccountChart: View {
                     x: .value("Date", dataPoint.date),
                     y: .value("Value", dataPoint.doubleValue)
                 )
-                .foregroundStyle(.blue)
+                .foregroundStyle(.green)
                 .lineStyle(StrokeStyle(lineWidth: 1.5))
                 .interpolationMethod(.linear)
                 
@@ -100,7 +100,7 @@ struct AccountChart: View {
                     x: .value("Date", dataPoint.date),
                     y: .value("Value", dataPoint.doubleValue)
                 )
-                .foregroundStyle(.blue)
+                .foregroundStyle(.green)
                 .symbolSize(8)
             }
             .chartXAxis {

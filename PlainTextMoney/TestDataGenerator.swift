@@ -49,7 +49,7 @@ class TestDataGenerator {
     
     enum TestDataSet {
         case set1  // Personal finance data (8 accounts, 5 dates)
-        case set2  // Large historic data (6 accounts, 2 years)
+        case set2  // Performance test data (8 accounts, 5 years, ~2000 updates)
         case set3  // Simple monthly pattern (2 accounts, £100/month for 6 months)
     }
     
@@ -74,6 +74,10 @@ class TestDataGenerator {
         
         let totalUpdates = accounts.reduce(0) { $0 + $1.updates.count }
         print("Test data generation complete: \(accounts.count) accounts, \(totalUpdates) updates")
+        
+        if dataSet == .set2 {
+            print("Performance test data: ~\(totalUpdates / accounts.count) updates per account")
+        }
     }
     
     // MARK: - Test Data Set 1 (Personal Finance Data)
@@ -217,16 +221,18 @@ class TestDataGenerator {
         }
     }
     
-    // MARK: - Test Data Set 2 (Large Historic Data)
+    // MARK: - Test Data Set 2 (Large Historic Data - Performance Testing)
     
     private static func createSet2Accounts(modelContext: ModelContext) -> [Account] {
         let accountData: [(String, Decimal, Int)] = [
-            ("ISA Savings", 5000, -24),           // 2 years ago
-            ("Pension Fund", 45000, -24),         // 2 years ago  
-            ("Emergency Fund", 3000, -24),        // 2 years ago
-            ("Investment Account", 8000, -24),    // 2 years ago
-            ("House Deposit", 15000, -24),        // 2 years ago
-            ("Crypto Portfolio", 2000, -24)       // 2 years ago
+            ("ISA Savings", 5000, -60),           // 5 years ago
+            ("Pension Fund", 45000, -60),         // 5 years ago  
+            ("Emergency Fund", 3000, -60),        // 5 years ago
+            ("Investment Account", 8000, -60),    // 5 years ago
+            ("House Deposit", 15000, -60),        // 5 years ago
+            ("Crypto Portfolio", 2000, -60),      // 5 years ago
+            ("Premium Bonds", 10000, -60),        // 5 years ago
+            ("Company Shares", 12000, -60)        // 5 years ago
         ]
         
         var accounts: [Account] = []
@@ -299,25 +305,37 @@ class TestDataGenerator {
         let startDate = account.createdAt
         let endDate = Date()
         
-        // Generate updates every 2 weeks for regular accounts
-        var currentDate = calendar.date(byAdding: .day, value: 14, to: startDate) ?? startDate
+        var currentDate = startDate
+        var updateCount = 0
         
+        // Generate approximately 2 updates per month for 5 years
+        // ~24 updates per year * 5 years = ~120 updates per account
         while currentDate < endDate {
-            // Skip some updates randomly to make it more realistic
-            if Bool.random() && Double.random(in: 0...1) > 0.8 {
-                currentDate = calendar.date(byAdding: .day, value: Int.random(in: 12...16), to: currentDate) ?? currentDate
-                continue
+            // Generate 2 updates for this month
+            for updateInMonth in 0..<2 {
+                // Random day within the month (1-28 to avoid month-end issues)
+                let dayOffset = updateInMonth == 0 ? Int.random(in: 1...14) : Int.random(in: 15...28)
+                
+                if let updateDate = calendar.date(byAdding: .day, value: dayOffset - 1, to: currentDate) {
+                    if updateDate < endDate {
+                        let newValue = calculateNextValue(for: account, at: updateDate, accountIndex: accountIndex)
+                        
+                        let update = AccountUpdate(value: newValue, account: account)
+                        // Random time during the day (9 AM to 8 PM)
+                        let hourOffset = Double.random(in: 9...20)
+                        let minuteOffset = Double.random(in: 0...59)
+                        update.date = updateDate.addingTimeInterval(hourOffset * 3600 + minuteOffset * 60)
+                        modelContext.insert(update)
+                        updateCount += 1
+                    }
+                }
             }
             
-            let newValue = calculateNextValue(for: account, at: currentDate, accountIndex: accountIndex)
-            
-            let update = AccountUpdate(value: newValue, account: account)
-            update.date = currentDate.addingTimeInterval(Double.random(in: 0...86400)) // Random time during the day
-            modelContext.insert(update)
-            
-            // Move to next update period (roughly 2 weeks)
-            currentDate = calendar.date(byAdding: .day, value: Int.random(in: 12...16), to: currentDate) ?? currentDate
+            // Move to next month
+            currentDate = calendar.date(byAdding: .month, value: 1, to: currentDate) ?? currentDate
         }
+        
+        print("Generated \(updateCount) updates for \(account.name)")
     }
     
     private static func generateAccount1Pattern(for account: Account, modelContext: ModelContext) {
@@ -420,6 +438,13 @@ class TestDataGenerator {
             
         case 5: // Crypto Portfolio - Highly volatile
             return Double.random(in: -15.0...20.0)
+            
+        case 6: // Premium Bonds - Stable with occasional prizes
+            return Bool.random() && Double.random(in: 0...1) > 0.9 ? Double.random(in: 0.5...2.0) : 0.0
+            
+        case 7: // Company Shares - Follows market trends with dividends
+            let marketTrend = sin(Double(date.timeIntervalSince1970) / (86400 * 365)) * 2.0
+            return marketTrend + Double.random(in: -3.0...3.0)
             
         default:
             return Double.random(in: -1.0...2.0)
