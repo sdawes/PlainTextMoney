@@ -91,11 +91,19 @@ struct DashboardView: View {
                                 Spacer()
                                 
                                 let change = percentageChange(for: account)
+                                let absoluteChange = absoluteValueChange(for: account)
                                 if change.percentage != 0 {
-                                    Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(change.isPositive ? .green : .red)
+                                    HStack(spacing: 4) {
+                                        Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(change.isPositive ? .green : .red)
+                                        
+                                        Text("(\(absoluteChange.isPositive ? "" : "-")£\(abs(absoluteChange.change).formatted()))")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(absoluteChange.isPositive ? .green : .red)
+                                    }
                                 }
                             }
                         }
@@ -165,6 +173,19 @@ struct DashboardView: View {
         
         let change = ((lastUpdate.value - firstUpdate.value) / firstUpdate.value) * 100
         return (Double(truncating: change as NSNumber), change >= 0)
+    }
+    
+    private func absoluteValueChange(for account: Account) -> (change: Decimal, isPositive: Bool) {
+        let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+        
+        guard let firstUpdate = sortedUpdates.first,
+              let lastUpdate = sortedUpdates.last,
+              firstUpdate != lastUpdate else {
+            return (0, true) // No change or only one update
+        }
+        
+        let absoluteChange = lastUpdate.value - firstUpdate.value
+        return (absoluteChange, absoluteChange >= 0)
     }
     
     private var portfolioPercentageChange: (percentage: Double, isPositive: Bool) {
