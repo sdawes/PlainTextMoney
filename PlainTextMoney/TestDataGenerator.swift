@@ -49,7 +49,7 @@ class TestDataGenerator {
     
     enum TestDataSet {
         case set1  // Personal finance data (8 accounts, 5 dates)
-        case set2  // Performance test data (8 accounts, 5 years, ~2000 updates)
+        case set2  // Performance test data (8 accounts, 5 years, ~4000 updates)
         case set3  // Simple monthly pattern (2 accounts, £100/month for 6 months)
     }
     
@@ -308,15 +308,15 @@ class TestDataGenerator {
         var currentDate = startDate
         var updateCount = 0
         
-        // Generate approximately 2 updates per month for 5 years
-        // ~24 updates per year * 5 years = ~120 updates per account
+        // Generate approximately 2 updates per week for 5 years (realistic heavy usage)
+        // ~104 updates per year * 5 years = ~520 updates per account
         while currentDate < endDate {
-            // Generate 2 updates for this month
-            for updateInMonth in 0..<2 {
-                // Random day within the month (1-28 to avoid month-end issues)
-                let dayOffset = updateInMonth == 0 ? Int.random(in: 1...14) : Int.random(in: 15...28)
+            // Generate 2 updates for this week
+            for updateInWeek in 0..<2 {
+                // Random day within the week
+                let dayOffset = Int.random(in: 0...6) // 0-6 days from start of week
                 
-                if let updateDate = calendar.date(byAdding: .day, value: dayOffset - 1, to: currentDate) {
+                if let updateDate = calendar.date(byAdding: .day, value: dayOffset, to: currentDate) {
                     if updateDate < endDate {
                         let newValue = calculateNextValue(for: account, at: updateDate, accountIndex: accountIndex)
                         
@@ -331,8 +331,8 @@ class TestDataGenerator {
                 }
             }
             
-            // Move to next month
-            currentDate = calendar.date(byAdding: .month, value: 1, to: currentDate) ?? currentDate
+            // Move to next week
+            currentDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentDate) ?? currentDate
         }
         
         print("Generated \(updateCount) updates for \(account.name)")

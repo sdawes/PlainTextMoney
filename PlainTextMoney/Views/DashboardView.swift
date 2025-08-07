@@ -76,9 +76,9 @@ struct DashboardView: View {
                 // Portfolio Value Chart Section
                 Section("Portfolio Chart") {
                     VStack(spacing: 12) {
-                        PortfolioChart(accounts: accounts)
+                        PortfolioChart(accounts: accounts, startDate: portfolioChartStartDate)
                             .frame(height: 200)
-                            .id("\(accounts.count)-\(totalUpdateCount)") // Force refresh when accounts or updates change
+                            .id("\(accounts.count)-\(totalUpdateCount)-\(selectedPeriod.rawValue)") // Force refresh when accounts, updates, or period changes
                         
                         HStack {
                             Text("Based on \(totalUpdateCount) account updates")
@@ -227,6 +227,28 @@ struct DashboardView: View {
             return PerformanceCalculationService.calculatePortfolioChangeOneYear(accounts: activeAccounts)
         case .allTime:
             return PerformanceCalculationService.calculatePortfolioChangeAllTime(accounts: activeAccounts)
+        }
+    }
+    
+    private var portfolioChartStartDate: Date? {
+        let calendar = Calendar.current
+        
+        switch selectedPeriod {
+        case .lastUpdate:
+            // Show from the second-to-last portfolio update
+            let allUpdates = activeAccounts.flatMap { $0.updates }
+                .sorted { $0.date < $1.date }
+            
+            if allUpdates.count >= 2 {
+                return allUpdates[allUpdates.count - 2].date
+            }
+            return nil
+        case .oneMonth:
+            return calendar.date(byAdding: .day, value: -30, to: Date())
+        case .oneYear:
+            return calendar.date(byAdding: .day, value: -365, to: Date())
+        case .allTime:
+            return nil // Show all data
         }
     }
     

@@ -10,15 +10,16 @@ import Charts
 
 struct PortfolioChart: View {
     let accounts: [Account]
+    let startDate: Date?
     let height: CGFloat
     let interpolationMethod: InterpolationMethod
     
-    init(accounts: [Account], height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
+    init(accounts: [Account], startDate: Date? = nil, height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
         // Filter for active accounts only
         self.accounts = accounts.filter { $0.isActive }
+        self.startDate = startDate
         self.height = height
         self.interpolationMethod = interpolationMethod
-        
     }
     
     // PERFORMANCE: Incremental portfolio calculation from updates only
@@ -44,8 +45,37 @@ struct PortfolioChart: View {
             portfolioPoints.append(ChartDataPoint(date: update.date, value: portfolioTotal))
         }
         
+        // Apply date filtering to the aggregated timeline if startDate is provided
+        if let startDate = startDate {
+            return filterPortfolioTimeline(portfolioPoints, from: startDate)
+        }
         
         return portfolioPoints
+    }
+    
+    // PERFORMANCE: Intelligent timeline filtering with boundary handling
+    private func filterPortfolioTimeline(_ portfolioPoints: [ChartDataPoint], from startDate: Date) -> [ChartDataPoint] {
+        var filteredPoints: [ChartDataPoint] = []
+        
+        // Find the last point before the startDate to maintain chart continuity
+        var boundaryPoint: ChartDataPoint? = nil
+        for point in portfolioPoints {
+            if point.date < startDate {
+                boundaryPoint = point
+            } else {
+                break
+            }
+        }
+        
+        // Add the boundary point if it exists (for chart continuity)
+        if let boundaryPoint = boundaryPoint {
+            filteredPoints.append(boundaryPoint)
+        }
+        
+        // Add all points from startDate onwards
+        filteredPoints.append(contentsOf: portfolioPoints.filter { $0.date >= startDate })
+        
+        return filteredPoints
     }
     
     private var chartDateRange: ClosedRange<Date> {
