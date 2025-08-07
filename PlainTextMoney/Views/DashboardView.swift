@@ -43,6 +43,29 @@ struct DashboardView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        
+                        // Portfolio Performance Display
+                        if portfolioPerformance.hasData {
+                            HStack {
+                                Text(portfolioContextLabel(for: selectedPeriod))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                HStack(spacing: 4) {
+                                    Text("\(portfolioPerformance.isPositive ? "" : "-")\(abs(portfolioPerformance.percentage), specifier: "%.1f")%")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(portfolioPerformance.isPositive ? .green : .red)
+                                    
+                                    Text("(\(portfolioPerformance.isPositive ? "" : "-")£\(abs(portfolioPerformance.absolute).formatted()))")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(portfolioPerformance.isPositive ? .green : .red)
+                                }
+                            }
+                        }
                     }
                     .padding(.vertical, 8)
                 }
@@ -191,6 +214,19 @@ struct DashboardView: View {
         }
     }
     
+    private var portfolioPerformance: (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        switch selectedPeriod {
+        case .lastUpdate:
+            return PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: activeAccounts)
+        case .oneMonth:
+            return PerformanceCalculationService.calculatePortfolioChangeOneMonth(accounts: activeAccounts)
+        case .oneYear:
+            return PerformanceCalculationService.calculatePortfolioChangeOneYear(accounts: activeAccounts)
+        case .allTime:
+            return PerformanceCalculationService.calculatePortfolioChangeAllTime(accounts: activeAccounts)
+        }
+    }
+    
     private func contextLabel(for account: Account, period: PerformanceCalculationService.TimePeriod) -> String {
         switch period {
         case .lastUpdate:
@@ -207,6 +243,22 @@ struct DashboardView: View {
             let sortedUpdates = account.updates.sorted { $0.date < $1.date }
             let firstDate = sortedUpdates.first?.date ?? account.createdAt
             return "Since start (\(firstDate.formatted(date: .abbreviated, time: .omitted)))"
+        }
+    }
+    
+    private func portfolioContextLabel(for period: PerformanceCalculationService.TimePeriod) -> String {
+        switch period {
+        case .lastUpdate:
+            return "Since last portfolio update"
+            
+        case .oneMonth:
+            return "Past month"
+            
+        case .oneYear:
+            return "Past year"
+            
+        case .allTime:
+            return "Since portfolio start"
         }
     }
     

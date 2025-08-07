@@ -9,11 +9,63 @@ import Foundation
 
 struct PerformanceCalculationService {
     
-    enum TimePeriod: CaseIterable, Identifiable {
-        case lastUpdate
-        case oneMonth
-        case oneYear
-        case allTime
+    // MARK: - Performance Caching Layer
+    
+    private struct PortfolioPerformanceCache {
+        private static var cache: [String: (Double, Decimal, Bool, Bool)] = [:]
+        private static var lastAccountHash: Int = 0
+        
+        static func getOrCalculate(
+            accounts: [Account],
+            period: TimePeriod,
+            calculator: () -> (Double, Decimal, Bool, Bool)
+        ) -> (Double, Decimal, Bool, Bool) {
+            // Create hash of account data to detect changes
+            let currentHash = accounts.map { account in
+                account.updates.map { "\($0.date.timeIntervalSince1970)-\($0.value)" }.joined()
+            }.joined().hashValue
+            
+            let cacheKey = "\(period.rawValue)-\(currentHash)"
+            
+            // Invalidate cache if accounts changed
+            if currentHash != lastAccountHash {
+                cache.removeAll()
+                lastAccountHash = currentHash
+                #if DEBUG
+                print("🧹 Portfolio cache invalidated - data changed")
+                #endif
+            }
+            
+            // Return cached result if available
+            if let cached = cache[cacheKey] {
+                #if DEBUG
+                print("⚡ Portfolio \(period.displayName) - cached result")
+                #endif
+                return cached
+            }
+            
+            // Calculate fresh result and cache it
+            #if DEBUG
+            let startTime = CFAbsoluteTimeGetCurrent()
+            #endif
+            
+            let result = calculator()
+            cache[cacheKey] = result
+            
+            #if DEBUG
+            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+            print("🔄 Portfolio \(period.displayName) - calculated in \(elapsed * 1000)ms")
+            #endif
+            
+            return result
+        }
+    }
+    
+    enum TimePeriod: String, CaseIterable, Identifiable {
+        case lastUpdate = "lastUpdate"
+        case oneMonth = "oneMonth"
+        case oneYear = "oneYear"
+        case allTime = "allTime"
         
         var id: Self { self }
         
@@ -160,6 +212,140 @@ struct PerformanceCalculationService {
             // Handle edge case where baseline value was 0
             percentage = 0.0
         }
+        
+        return (percentage, absoluteChange, isPositive, true)
+    }
+    
+    // MARK: - Portfolio Performance Calculations
+    
+    /// Calculate portfolio performance since the last update across all accounts
+    static func calculatePortfolioChangeFromLastUpdate(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .lastUpdate) {
+            let activeAccounts = accounts.filter { $0.isActive }
+            guard !activeAccounts.isEmpty else { return (0.0, 0, true, false) }
+            
+            // Get all updates across all accounts, sorted chronologically
+            let allUpdates = activeAccounts.flatMap { $0.updates }
+                .sorted { $0.date < $1.date }
+            
+            guard allUpdates.count >= 2 else { return (0.0, 0, true, false) }
+            
+            // Find the most recent update
+            let latestUpdate = allUpdates.last!
+            
+            // Calculate portfolio value at that point and at the previous significant point
+            var accountValues: [String: Decimal] = [:]
+            var previousPortfolioValue: Decimal = 0
+            var currentPortfolioValue: Decimal = 0
+            
+            // Replay updates to find portfolio values
+            for update in allUpdates {
+                accountValues[update.account?.name ?? ""] = update.value
+                let portfolioTotal = accountValues.values.reduce(0, +)
+                
+                if update == latestUpdate {
+                    currentPortfolioValue = portfolioTotal
+                } else if update == allUpdates[allUpdates.count - 2] {
+                    previousPortfolioValue = portfolioTotal
+                }
+            }
+            
+            let absoluteChange = currentPortfolioValue - previousPortfolioValue
+            let isPositive = absoluteChange >= 0
+            
+            let percentage: Double
+            if previousPortfolioValue > 0 {
+                let change = (absoluteChange / previousPortfolioValue) * 100
+                percentage = Double(truncating: change as NSNumber)
+            } else {
+                percentage = 0.0
+            }
+            
+            return (percentage, absoluteChange, isPositive, true)
+        }
+    }
+    
+    /// Calculate portfolio performance over the last month
+    static func calculatePortfolioChangeOneMonth(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .oneMonth) {
+            return calculatePortfolioChangeForTimeframe(accounts: accounts, daysBack: 30)
+        }
+    }
+    
+    /// Calculate portfolio performance over the last year
+    static func calculatePortfolioChangeOneYear(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .oneYear) {
+            return calculatePortfolioChangeForTimeframe(accounts: accounts, daysBack: 365)
+        }
+    }
+    
+    /// Calculate portfolio performance since the very beginning
+    static func calculatePortfolioChangeAllTime(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .allTime) {
+            let activeAccounts = accounts.filter { $0.isActive }
+            guard !activeAccounts.isEmpty else { return (0.0, 0, true, false) }
+            
+            // Calculate current portfolio total
+            let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+                let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
+                return total + (latestUpdate?.value ?? 0)
+            }
+            
+            // Calculate baseline total (sum of all first update values)
+            let baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+                let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
+                return total + (firstUpdate?.value ?? 0)
+            }
+            
+            guard baselineTotal > 0 else { return (0.0, 0, true, false) }
+            
+            let absoluteChange = currentTotal - baselineTotal
+            let isPositive = absoluteChange >= 0
+            
+            let change = (absoluteChange / baselineTotal) * 100
+            let percentage = Double(truncating: change as NSNumber)
+            
+            return (percentage, absoluteChange, isPositive, true)
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Helper method for time-based portfolio calculations
+    private static func calculatePortfolioChangeForTimeframe(accounts: [Account], daysBack: Int) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        let activeAccounts = accounts.filter { $0.isActive }
+        guard !activeAccounts.isEmpty else { return (0.0, 0, true, false) }
+        
+        let calendar = Calendar.current
+        let targetDate = calendar.date(byAdding: .day, value: -daysBack, to: Date()) ?? Date()
+        
+        // Calculate current portfolio total
+        let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
+            return total + (latestUpdate?.value ?? 0)
+        }
+        
+        // Calculate baseline portfolio total (at target date)
+        let baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let eligibleUpdates = account.updates
+                .filter { $0.date <= targetDate }
+                .sorted { $0.date < $1.date }
+            
+            if let baselineUpdate = eligibleUpdates.last {
+                return total + baselineUpdate.value
+            } else {
+                // Account created after target date - exclude from baseline
+                return total
+            }
+        }
+        
+        guard baselineTotal > 0 else { return (0.0, 0, true, false) }
+        
+        let absoluteChange = currentTotal - baselineTotal
+        let isPositive = absoluteChange >= 0
+        
+        let change = (absoluteChange / baselineTotal) * 100
+        let percentage = Double(truncating: change as NSNumber)
         
         return (percentage, absoluteChange, isPositive, true)
     }
