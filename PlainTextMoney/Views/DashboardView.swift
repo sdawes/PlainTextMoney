@@ -235,12 +235,10 @@ struct DashboardView: View {
         
         switch selectedPeriod {
         case .lastUpdate:
-            // Show from the second-to-last portfolio update
-            let allUpdates = activeAccounts.flatMap { $0.updates }
-                .sorted { $0.date < $1.date }
-            
-            if allUpdates.count >= 2 {
-                return allUpdates[allUpdates.count - 2].date
+            // Generate portfolio timeline and use second-to-last portfolio point
+            let portfolioPoints = generatePortfolioTimeline()
+            if portfolioPoints.count >= 2 {
+                return portfolioPoints[portfolioPoints.count - 2].date
             }
             return nil
         case .oneMonth:
@@ -250,6 +248,32 @@ struct DashboardView: View {
         case .allTime:
             return nil // Show all data
         }
+    }
+    
+    // PERFORMANCE: Generate portfolio timeline (shared with PortfolioChart logic)
+    private func generatePortfolioTimeline() -> [ChartDataPoint] {
+        // Get all updates from all active accounts, sorted chronologically
+        let allUpdates = activeAccounts.flatMap { $0.updates }
+            .sorted { $0.date < $1.date }
+        
+        guard !allUpdates.isEmpty else { 
+            return [] 
+        }
+        
+        var portfolioPoints: [ChartDataPoint] = []
+        var currentAccountValues: [String: Decimal] = [:] // Track running account values
+        
+        // For each update, recalculate portfolio total incrementally
+        for update in allUpdates {
+            // Update this account's current value
+            currentAccountValues[update.account?.name ?? ""] = update.value
+            
+            // Calculate portfolio total from current values
+            let portfolioTotal = currentAccountValues.values.reduce(0, +)
+            portfolioPoints.append(ChartDataPoint(date: update.date, value: portfolioTotal))
+        }
+        
+        return portfolioPoints
     }
     
     private func contextLabel(for account: Account, period: PerformanceCalculationService.TimePeriod) -> String {

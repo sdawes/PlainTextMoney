@@ -57,19 +57,24 @@ struct PortfolioChart: View {
     private func filterPortfolioTimeline(_ portfolioPoints: [ChartDataPoint], from startDate: Date) -> [ChartDataPoint] {
         var filteredPoints: [ChartDataPoint] = []
         
-        // Find the last point before the startDate to maintain chart continuity
-        var boundaryPoint: ChartDataPoint? = nil
-        for point in portfolioPoints {
-            if point.date < startDate {
-                boundaryPoint = point
-            } else {
-                break
-            }
-        }
+        // Check if startDate exactly matches a portfolio point (no boundary needed)
+        let hasExactMatch = portfolioPoints.contains { $0.date == startDate }
         
-        // Add the boundary point if it exists (for chart continuity)
-        if let boundaryPoint = boundaryPoint {
-            filteredPoints.append(boundaryPoint)
+        if !hasExactMatch {
+            // Find the last point before the startDate to maintain chart continuity
+            var boundaryPoint: ChartDataPoint? = nil
+            for point in portfolioPoints {
+                if point.date < startDate {
+                    boundaryPoint = point
+                } else {
+                    break
+                }
+            }
+            
+            // Add the boundary point if it exists (for chart continuity)
+            if let boundaryPoint = boundaryPoint {
+                filteredPoints.append(boundaryPoint)
+            }
         }
         
         // Add all points from startDate onwards
