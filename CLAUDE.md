@@ -231,6 +231,26 @@ PortfolioChart(accounts: accounts)
 - **Native sizing**: Automatic font scaling for accessibility
 - **Native behaviors**: Standard iOS gestures and interactions
 
+### Dashboard Features
+- **Portfolio Total**: Large title showing current total value with auto-scaling text
+- **Account Count**: Simple "N accounts" display below portfolio total  
+- **Account List**: Individual accounts show percentage and absolute value changes
+- **Chart Integration**: Native Swift Charts showing portfolio growth over time
+- **Consistent Typography**: App locked to `.large` text size to prevent layout issues
+
+### Fixed Text Sizing
+```swift
+.environment(\.sizeCategory, .large)  // Prevents user text scaling issues
+```
+
+### Auto-Scaling Portfolio Value
+```swift
+Text("£\(totalPortfolioValue.formatted())")
+    .font(.largeTitle)
+    .minimumScaleFactor(0.5)  // Auto-scales for large values
+    .lineLimit(1)             // Prevents wrapping
+```
+
 ## Account Management - Native Patterns
 
 ### Account Lifecycle
