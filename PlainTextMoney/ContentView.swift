@@ -12,13 +12,16 @@ struct ContentView: View {
     @State private var isLoading = true
     
     var body: some View {
-        if isLoading {
-            LoadingViewWrapper(onLoadingComplete: { 
-                isLoading = false 
-            })
-        } else {
-            DashboardView()
+        Group {
+            if isLoading {
+                LoadingViewWrapper(onLoadingComplete: { 
+                    isLoading = false 
+                })
+            } else {
+                DashboardView()
+            }
         }
+        .environment(\.sizeCategory, .large)
     }
 }
 

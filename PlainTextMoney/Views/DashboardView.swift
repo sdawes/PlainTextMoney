@@ -12,7 +12,6 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     @State private var showingAddAccount = false
-    @State private var showingPortfolioInfo = false
     
     var body: some View {
         NavigationStack {
@@ -24,35 +23,13 @@ struct DashboardView: View {
                             Text("£\(totalPortfolioValue.formatted())")
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
+                                .minimumScaleFactor(0.5)
+                                .lineLimit(1)
                             Spacer()
                             VStack(alignment: .trailing, spacing: 4) {
                                 Text("\(activeAccountCount) accounts")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-                                
-                                let change = portfolioPercentageChange
-                                let absoluteChange = portfolioAbsoluteValueChange
-                                if change.percentage != 0 {
-                                    HStack(spacing: 4) {
-                                        Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(change.isPositive ? .green : .red)
-                                        
-                                        Text("(\(absoluteChange.isPositive ? "" : "-")£\(abs(absoluteChange.change).formatted()))")
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(absoluteChange.isPositive ? .green : .red)
-                                        
-                                        Button(action: {
-                                            showingPortfolioInfo = true
-                                        }) {
-                                            Image(systemName: "info.circle")
-                                                .font(.caption)
-                                                .foregroundColor(.blue)
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
@@ -136,11 +113,6 @@ struct DashboardView: View {
             .sheet(isPresented: $showingAddAccount) {
                 AddAccountView()
             }
-            .alert("Portfolio Performance", isPresented: $showingPortfolioInfo) {
-                Button("OK") { }
-            } message: {
-                Text("Shows total wealth growth since you started tracking. All deposits and new accounts contribute to your growth percentage.")
-            }
             .overlay(alignment: .bottomLeading) {
                 #if DEBUG
                 debugTestDataButton
@@ -194,37 +166,6 @@ struct DashboardView: View {
         return (absoluteChange, absoluteChange >= 0)
     }
     
-    private var portfolioPercentageChange: (percentage: Double, isPositive: Bool) {
-        guard !activeAccounts.isEmpty else { return (0.0, true) }
-        
-        // Calculate portfolio baseline value (sum of all accounts' first values)
-        let baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
-            // Use each account's first update value as its baseline contribution
-            let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
-            return total + (firstUpdate?.value ?? 0)
-        }
-        
-        let currentTotal = totalPortfolioValue
-        
-        guard baselineTotal > 0 else { return (0.0, true) }
-        
-        let change = ((currentTotal - baselineTotal) / baselineTotal) * 100
-        return (Double(truncating: change as NSNumber), change >= 0)
-    }
-    
-    private var portfolioAbsoluteValueChange: (change: Decimal, isPositive: Bool) {
-        guard !activeAccounts.isEmpty else { return (0, true) }
-        
-        // Calculate initial portfolio value (sum of all accounts' first update values)
-        let initialTotal = activeAccounts.reduce(Decimal(0)) { total, account in
-            let firstUpdate = account.updates.sorted { $0.date < $1.date }.first
-            return total + (firstUpdate?.value ?? 0)
-        }
-        
-        let currentTotal = totalPortfolioValue
-        let absoluteChange = currentTotal - initialTotal
-        return (absoluteChange, absoluteChange >= 0)
-    }
     
     private var totalPortfolioValue: Decimal {
         // SIMPLIFIED: Always calculate in real-time from current account values
