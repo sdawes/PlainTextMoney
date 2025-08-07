@@ -6,20 +6,21 @@
 //
 
 import Foundation
+import SwiftData
 
 struct PerformanceCalculationService {
     
     // MARK: - Performance Caching Layer
     
     private struct PortfolioPerformanceCache {
-        private static var cache: [String: (Double, Decimal, Bool, Bool)] = [:]
+        private static var cache: [String: (Double, Decimal, Bool, Bool, String)] = [:]
         private static var lastAccountHash: Int = 0
         
         static func getOrCalculate(
             accounts: [Account],
             period: TimePeriod,
-            calculator: () -> (Double, Decimal, Bool, Bool)
-        ) -> (Double, Decimal, Bool, Bool) {
+            calculator: () -> (Double, Decimal, Bool, Bool, String)
+        ) -> (Double, Decimal, Bool, Bool, String) {
             // Create hash of account data to detect changes
             let currentHash = accounts.map { account in
                 account.updates.map { "\($0.date.timeIntervalSince1970)-\($0.value)" }.joined()
@@ -219,16 +220,16 @@ struct PerformanceCalculationService {
     // MARK: - Portfolio Performance Calculations
     
     /// Calculate portfolio performance since the last update across all accounts
-    static func calculatePortfolioChangeFromLastUpdate(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+    static func calculatePortfolioChangeFromLastUpdate(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .lastUpdate) {
             let activeAccounts = accounts.filter { $0.isActive }
-            guard !activeAccounts.isEmpty else { return (0.0, 0, true, false) }
+            guard !activeAccounts.isEmpty else { return (0.0, 0, true, false, "") }
             
             // Get all updates across all accounts, sorted chronologically
             let allUpdates = activeAccounts.flatMap { $0.updates }
                 .sorted { $0.date < $1.date }
             
-            guard allUpdates.count >= 2 else { return (0.0, 0, true, false) }
+            guard allUpdates.count >= 2 else { return (0.0, 0, true, false, "Need more updates") }
             
             // Find the most recent update
             let latestUpdate = allUpdates.last!
@@ -261,29 +262,29 @@ struct PerformanceCalculationService {
                 percentage = 0.0
             }
             
-            return (percentage, absoluteChange, isPositive, true)
+            return (percentage, absoluteChange, isPositive, true, "Since last update")
         }
     }
     
     /// Calculate portfolio performance over the last month
-    static func calculatePortfolioChangeOneMonth(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+    static func calculatePortfolioChangeOneMonth(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .oneMonth) {
             return calculatePortfolioChangeForTimeframe(accounts: accounts, daysBack: 30)
         }
     }
     
     /// Calculate portfolio performance over the last year
-    static func calculatePortfolioChangeOneYear(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+    static func calculatePortfolioChangeOneYear(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .oneYear) {
             return calculatePortfolioChangeForTimeframe(accounts: accounts, daysBack: 365)
         }
     }
     
     /// Calculate portfolio performance since the very beginning
-    static func calculatePortfolioChangeAllTime(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+    static func calculatePortfolioChangeAllTime(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .allTime) {
             let activeAccounts = accounts.filter { $0.isActive }
-            guard !activeAccounts.isEmpty else { return (0.0, 0, true, false) }
+            guard !activeAccounts.isEmpty else { return (0.0, 0, true, false, "") }
             
             // Calculate current portfolio total
             let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
@@ -297,7 +298,7 @@ struct PerformanceCalculationService {
                 return total + (firstUpdate?.value ?? 0)
             }
             
-            guard baselineTotal > 0 else { return (0.0, 0, true, false) }
+            guard baselineTotal > 0 else { return (0.0, 0, true, false, "") }
             
             let absoluteChange = currentTotal - baselineTotal
             let isPositive = absoluteChange >= 0
@@ -305,16 +306,30 @@ struct PerformanceCalculationService {
             let change = (absoluteChange / baselineTotal) * 100
             let percentage = Double(truncating: change as NSNumber)
             
-            return (percentage, absoluteChange, isPositive, true)
+            // Generate label with actual start date
+            let oldestDate = activeAccounts.compactMap { account in
+                account.updates.sorted { $0.date < $1.date }.first?.date
+            }.min()
+            
+            let actualPeriodLabel: String
+            if let oldestDate = oldestDate {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                actualPeriodLabel = "Since start (\(formatter.string(from: oldestDate)))"
+            } else {
+                actualPeriodLabel = "Since start"
+            }
+            
+            return (percentage, absoluteChange, isPositive, true, actualPeriodLabel)
         }
     }
     
     // MARK: - Helper Methods
     
     /// Helper method for time-based portfolio calculations
-    private static func calculatePortfolioChangeForTimeframe(accounts: [Account], daysBack: Int) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+    private static func calculatePortfolioChangeForTimeframe(accounts: [Account], daysBack: Int) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         let activeAccounts = accounts.filter { $0.isActive }
-        guard !activeAccounts.isEmpty else { return (0.0, 0, true, false) }
+        guard !activeAccounts.isEmpty else { return (0.0, 0, true, false, "") }
         
         let calendar = Calendar.current
         let targetDate = calendar.date(byAdding: .day, value: -daysBack, to: Date()) ?? Date()
@@ -326,7 +341,7 @@ struct PerformanceCalculationService {
         }
         
         // Calculate baseline portfolio total (at target date)
-        let baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+        var baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
             let eligibleUpdates = account.updates
                 .filter { $0.date <= targetDate }
                 .sorted { $0.date < $1.date }
@@ -339,7 +354,28 @@ struct PerformanceCalculationService {
             }
         }
         
-        guard baselineTotal > 0 else { return (0.0, 0, true, false) }
+        // Track whether we're using target date or fallback data
+        var usedFallback = false
+        var oldestDate: Date? = nil
+        
+        // If no data from target date, fall back to oldest available data
+        if baselineTotal <= 0 {
+            usedFallback = true
+            baselineTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+                let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+                if let firstUpdate = sortedUpdates.first {
+                    if oldestDate == nil || firstUpdate.date < oldestDate! {
+                        oldestDate = firstUpdate.date
+                    }
+                    return total + firstUpdate.value
+                } else {
+                    return total
+                }
+            }
+        }
+        
+        // If still no data, return no change
+        guard baselineTotal > 0 else { return (0.0, 0, true, false, "") }
         
         let absoluteChange = currentTotal - baselineTotal
         let isPositive = absoluteChange >= 0
@@ -347,6 +383,20 @@ struct PerformanceCalculationService {
         let change = (absoluteChange / baselineTotal) * 100
         let percentage = Double(truncating: change as NSNumber)
         
-        return (percentage, absoluteChange, isPositive, true)
+        // Generate contextual label
+        let actualPeriodLabel: String
+        if usedFallback, let oldestDate = oldestDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            actualPeriodLabel = "Since start (\(formatter.string(from: oldestDate)))"
+        } else if daysBack >= 365 {
+            actualPeriodLabel = "Past year"
+        } else if daysBack >= 30 {
+            actualPeriodLabel = "Past month"
+        } else {
+            actualPeriodLabel = "Recent period"
+        }
+        
+        return (percentage, absoluteChange, isPositive, true, actualPeriodLabel)
     }
 }

@@ -17,16 +17,6 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             List {
-                // Time Period Selection
-                Section {
-                    Picker("Time Period", selection: $selectedPeriod) {
-                        ForEach(PerformanceCalculationService.TimePeriod.allCases) { period in
-                            Text(period.displayName).tag(period)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-                
                 // Portfolio Summary Section
                 Section("Portfolio Total") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -47,7 +37,7 @@ struct DashboardView: View {
                         // Portfolio Performance Display
                         if portfolioPerformance.hasData {
                             HStack {
-                                Text(portfolioContextLabel(for: selectedPeriod))
+                                Text(portfolioPerformance.actualPeriodLabel)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 
@@ -66,6 +56,15 @@ struct DashboardView: View {
                                 }
                             }
                         }
+                        
+                        // Time Period Picker
+                        Picker("Time Period", selection: $selectedPeriod) {
+                            ForEach(PerformanceCalculationService.TimePeriod.allCases) { period in
+                                Text(period.displayName).tag(period)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .padding(.top, 4)
                     }
                     .padding(.vertical, 8)
                 }
@@ -214,7 +213,7 @@ struct DashboardView: View {
         }
     }
     
-    private var portfolioPerformance: (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+    private var portfolioPerformance: (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         switch selectedPeriod {
         case .lastUpdate:
             return PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: activeAccounts)
@@ -245,23 +244,6 @@ struct DashboardView: View {
             return "Since start (\(firstDate.formatted(date: .abbreviated, time: .omitted)))"
         }
     }
-    
-    private func portfolioContextLabel(for period: PerformanceCalculationService.TimePeriod) -> String {
-        switch period {
-        case .lastUpdate:
-            return "Since last portfolio update"
-            
-        case .oneMonth:
-            return "Past month"
-            
-        case .oneYear:
-            return "Past year"
-            
-        case .allTime:
-            return "Since portfolio start"
-        }
-    }
-    
     
     private var totalPortfolioValue: Decimal {
         // SIMPLIFIED: Always calculate in real-time from current account values
