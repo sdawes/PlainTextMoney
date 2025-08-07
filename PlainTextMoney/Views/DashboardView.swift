@@ -48,11 +48,15 @@ struct DashboardView: View {
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(portfolioPerformance.isPositive ? .green : .red)
+                                        .minimumScaleFactor(0.7)
+                                        .lineLimit(1)
                                     
                                     Text("(\(portfolioPerformance.isPositive ? "" : "-")£\(abs(portfolioPerformance.absolute).formatted()))")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(portfolioPerformance.isPositive ? .green : .red)
+                                        .minimumScaleFactor(0.7)
+                                        .lineLimit(1)
                                 }
                             }
                         }
@@ -89,7 +93,7 @@ struct DashboardView: View {
                 // Accounts Section
                 Section("Accounts") {
                 ForEach(accounts, id: \.name) { account in
-                    NavigationLink(destination: AccountDetailView(account: account)) {
+                    NavigationLink(destination: AccountDetailView(account: account, selectedPeriod: $selectedPeriod)) {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text(account.name)

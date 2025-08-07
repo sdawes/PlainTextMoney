@@ -11,10 +11,54 @@ import Charts
 
 struct AccountDetailView: View {
     let account: Account
+    @Binding var selectedPeriod: PerformanceCalculationService.TimePeriod
     @Environment(\.modelContext) private var modelContext
     @State private var showingUpdateValue = false
     @State private var newValue = ""
     @State private var validationError = ""
+    
+    private var periodDisplayName: String {
+        switch selectedPeriod {
+        case .lastUpdate:
+            return "Recent Updates"
+        case .oneMonth:
+            return "Past Month"
+        case .oneYear:
+            return "Past Year"
+        case .allTime:
+            return "All Time"
+        }
+    }
+    
+    private var chartStartDate: Date? {
+        let calendar = Calendar.current
+        let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+        
+        switch selectedPeriod {
+        case .lastUpdate:
+            // Show from the second-to-last update
+            if sortedUpdates.count >= 2 {
+                return sortedUpdates[sortedUpdates.count - 2].date
+            }
+            return nil
+        case .oneMonth:
+            return calendar.date(byAdding: .day, value: -30, to: Date())
+        case .oneYear:
+            return calendar.date(byAdding: .day, value: -365, to: Date())
+        case .allTime:
+            return nil // Show all data
+        }
+    }
+    
+    private var visibleUpdateCount: Int {
+        if let startDate = chartStartDate {
+            // Count updates that are on or after the start date
+            return account.updates.filter { $0.date >= startDate }.count
+        } else {
+            // No filter, return all updates
+            return account.updates.count
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -42,11 +86,19 @@ struct AccountDetailView: View {
                 // Account Value Chart Section
                 Section("Value Chart") {
                     VStack(spacing: 12) {
-                        AccountChart(account: account, interpolationMethod: .linear)
+                        // Period Picker - synced with Dashboard
+                        Picker("Time Period", selection: $selectedPeriod) {
+                            ForEach(PerformanceCalculationService.TimePeriod.allCases) { period in
+                                Text(period.displayName).tag(period)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        
+                        AccountChart(account: account, startDate: chartStartDate, interpolationMethod: .linear)
                             .frame(height: 200)
                         
                         HStack {
-                            Text("Based on \(account.updates.count) account updates")
+                            Text("Based on \(visibleUpdateCount) \(visibleUpdateCount == 1 ? "update" : "updates") in this period")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Spacer()

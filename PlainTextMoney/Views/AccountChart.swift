@@ -20,22 +20,29 @@ struct ChartDataPoint {
 
 struct AccountChart: View {
     let account: Account
+    let startDate: Date?
     let height: CGFloat
     let interpolationMethod: InterpolationMethod
     
-    init(account: Account, height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
+    init(account: Account, startDate: Date? = nil, height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
         self.account = account
+        self.startDate = startDate
         self.height = height
         self.interpolationMethod = interpolationMethod
     }
     
     // PERFORMANCE: Direct chart data from updates only (no snapshots)
     private var chartDataPoints: [ChartDataPoint] {
-        let updates = account.updates.sorted { $0.date < $1.date }
+        var updates = account.updates.sorted { $0.date < $1.date }
+        
+        // Filter updates based on startDate if provided
+        if let startDate = startDate {
+            updates = updates.filter { $0.date >= startDate }
+        }
+        
         let dataPoints = updates.map { update in
             ChartDataPoint(date: update.date, value: update.value)
         }
-        
         
         return dataPoints
     }
