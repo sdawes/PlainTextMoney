@@ -12,10 +12,21 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     @State private var showingAddAccount = false
+    @State private var selectedPeriod: PerformanceCalculationService.TimePeriod = .lastUpdate
     
     var body: some View {
         NavigationStack {
             List {
+                // Time Period Selection
+                Section {
+                    Picker("Time Period", selection: $selectedPeriod) {
+                        ForEach(PerformanceCalculationService.TimePeriod.allCases) { period in
+                            Text(period.displayName).tag(period)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+                
                 // Portfolio Summary Section
                 Section("Portfolio Total") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -67,25 +78,26 @@ struct DashboardView: View {
                                     .fontWeight(.medium)
                             }
                             HStack {
-                                Text("Last Updated: \(lastUpdatedDate(for: account).formatted(date: .abbreviated, time: .omitted))")
+                                Text(contextLabel(for: account, period: selectedPeriod))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 
                                 Spacer()
                                 
-                                let change = percentageChange(for: account)
-                                let absoluteChange = absoluteValueChange(for: account)
-                                if change.percentage != 0 {
+                                // Calculate performance based on selected period
+                                let performanceData = calculateAccountPerformance(account: account, period: selectedPeriod)
+                                
+                                if performanceData.hasData {
                                     HStack(spacing: 4) {
-                                        Text("\(change.isPositive ? "" : "-")\(abs(change.percentage), specifier: "%.1f")%")
+                                        Text("\(performanceData.isPositive ? "" : "-")\(abs(performanceData.percentage), specifier: "%.1f")%")
                                             .font(.caption)
                                             .fontWeight(.medium)
-                                            .foregroundColor(change.isPositive ? .green : .red)
+                                            .foregroundColor(performanceData.isPositive ? .green : .red)
                                         
-                                        Text("(\(absoluteChange.isPositive ? "" : "-")£\(abs(absoluteChange.change).formatted()))")
+                                        Text("(\(performanceData.isPositive ? "" : "-")£\(abs(performanceData.absolute).formatted()))")
                                             .font(.caption)
                                             .fontWeight(.medium)
-                                            .foregroundColor(absoluteChange.isPositive ? .green : .red)
+                                            .foregroundColor(performanceData.isPositive ? .green : .red)
                                     }
                                 }
                             }
@@ -164,6 +176,38 @@ struct DashboardView: View {
         
         let absoluteChange = lastUpdate.value - firstUpdate.value
         return (absoluteChange, absoluteChange >= 0)
+    }
+    
+    private func calculateAccountPerformance(account: Account, period: PerformanceCalculationService.TimePeriod) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        switch period {
+        case .lastUpdate:
+            return PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
+        case .oneMonth:
+            return PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
+        case .oneYear:
+            return PerformanceCalculationService.calculateAccountChangeOneYear(account: account)
+        case .allTime:
+            return PerformanceCalculationService.calculateAccountChangeAllTime(account: account)
+        }
+    }
+    
+    private func contextLabel(for account: Account, period: PerformanceCalculationService.TimePeriod) -> String {
+        switch period {
+        case .lastUpdate:
+            let date = lastUpdatedDate(for: account)
+            return "Since last update (\(date.formatted(date: .abbreviated, time: .omitted)))"
+            
+        case .oneMonth:
+            return "Past month"
+            
+        case .oneYear:
+            return "Past year"
+            
+        case .allTime:
+            let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+            let firstDate = sortedUpdates.first?.date ?? account.createdAt
+            return "Since start (\(firstDate.formatted(date: .abbreviated, time: .omitted)))"
+        }
     }
     
     
