@@ -10,6 +10,10 @@ import Foundation
 
 @Model
 class Account {
+    // PERFORMANCE: SwiftData indexes for fast account queries
+    // These indexes dramatically speed up account filtering and lookup operations
+    #Index<Account>([\.isActive], [\.name])
+    
     var name: String
     var createdAt: Date
     var isActive: Bool
