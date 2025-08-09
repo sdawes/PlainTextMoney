@@ -12,12 +12,142 @@ import SwiftData
 /// Offloads heavy calculations from the main thread for smooth UI performance
 @ModelActor
 actor PortfolioEngine {
+    // MARK: - Incremental History Management
+    
+    /// Ensure portfolio history is up to date with latest account updates
+    /// - Parameter accounts: Active accounts to track
+    /// - Returns: Array of up-to-date portfolio history points
+    func ensurePortfolioHistoryUpToDate(accounts: [Account]) async -> [PortfolioHistory] {
+        let activeAccounts = accounts.filter { $0.isActive }
+        let existingHistory = getAllValidHistory()
+        
+        // If no history exists, build initial history from all updates
+        if existingHistory.isEmpty {
+            print("📊 Building initial portfolio history from all updates")
+            return await buildInitialPortfolioHistory(accounts: activeAccounts)
+        }
+        
+        let lastHistory = existingHistory.last
+        let cutoffDate = lastHistory?.date ?? Date.distantPast
+        let newUpdates = getAllUpdatesAfter(cutoffDate, from: activeAccounts)
+        
+        // If no new updates, return existing history
+        if newUpdates.isEmpty {
+            return existingHistory
+        }
+        
+        print("📊 Incremental update: Processing \(newUpdates.count) new updates since \(cutoffDate)")
+        
+        // Build incremental history from the last known state
+        var currentAccountValues = lastHistory?.accountValues ?? [:]
+        var newHistoryPoints: [PortfolioHistory] = []
+        
+        for update in newUpdates {
+            // Update this account's value
+            currentAccountValues[update.account?.name ?? ""] = update.value
+            
+            // Calculate new portfolio total
+            let portfolioTotal = currentAccountValues.values.reduce(0, +)
+            
+            // Create new history point
+            let historyPoint = PortfolioHistory(
+                date: update.date,
+                totalValue: portfolioTotal,
+                accountValues: currentAccountValues
+            )
+            
+            modelContext.insert(historyPoint)
+            newHistoryPoints.append(historyPoint)
+        }
+        
+        // Save new history points
+        do {
+            try modelContext.save()
+            print("✅ Saved \(newHistoryPoints.count) incremental history points")
+        } catch {
+            print("❌ Error saving incremental history: \(error)")
+        }
+        
+        return getAllValidHistory()
+    }
+    
+    /// Build initial portfolio history from all existing updates
+    private func buildInitialPortfolioHistory(accounts: [Account]) async -> [PortfolioHistory] {
+        let allUpdates = accounts
+            .filter { $0.isActive }
+            .flatMap { $0.updates }
+            .sorted { $0.date < $1.date }
+        
+        guard !allUpdates.isEmpty else {
+            return []
+        }
+        
+        var currentAccountValues: [String: Decimal] = [:]
+        var historyPoints: [PortfolioHistory] = []
+        
+        for update in allUpdates {
+            // Update this account's value
+            currentAccountValues[update.account?.name ?? ""] = update.value
+            
+            // Calculate new portfolio total
+            let portfolioTotal = currentAccountValues.values.reduce(0, +)
+            
+            // Create new history point
+            let historyPoint = PortfolioHistory(
+                date: update.date,
+                totalValue: portfolioTotal,
+                accountValues: currentAccountValues
+            )
+            
+            modelContext.insert(historyPoint)
+            historyPoints.append(historyPoint)
+        }
+        
+        // Save all history points
+        do {
+            try modelContext.save()
+            print("✅ Built initial portfolio history with \(historyPoints.count) points")
+        } catch {
+            print("❌ Error saving initial portfolio history: \(error)")
+        }
+        
+        return historyPoints
+    }
+    
+    /// Invalidate history after a specific date (when data is deleted/modified)
+    /// - Parameter date: Date after which to invalidate history
+    func invalidateHistoryAfter(_ date: Date) async {
+        PortfolioHistory.invalidateHistoryAfter(date, in: modelContext)
+        print("🗑️ Invalidated portfolio history after \(date)")
+    }
+    
     // MARK: - Portfolio Timeline Generation
     
-    /// Generate portfolio timeline points from all account updates
+    /// Generate portfolio timeline points using incremental history for optimal performance
     /// - Parameter accounts: Active accounts to include in timeline
     /// - Returns: Array of chart data points representing portfolio value over time
     func generatePortfolioTimeline(accounts: [Account]) async -> [ChartDataPoint] {
+        do {
+            // Try incremental history approach
+            let historyPoints = await ensurePortfolioHistoryUpToDate(accounts: accounts)
+            
+            // If we got valid history points, use them
+            if !historyPoints.isEmpty {
+                return historyPoints.map { $0.toChartDataPoint() }
+            }
+        } catch {
+            print("❌ Incremental history failed, falling back to legacy: \(error)")
+        }
+        
+        // Fallback to legacy timeline generation
+        print("📊 Using legacy timeline generation")
+        return await generatePortfolioTimelineLegacy(accounts: accounts)
+    }
+    
+    /// Legacy method: Generate timeline by processing all updates (fallback for edge cases)
+    /// - Parameter accounts: Active accounts to include in timeline
+    /// - Returns: Array of chart data points representing portfolio value over time
+    func generatePortfolioTimelineLegacy(accounts: [Account]) async -> [ChartDataPoint] {
         // Get all updates from all active accounts, sorted chronologically
         let allUpdates = accounts
             .filter { $0.isActive }
@@ -59,10 +189,10 @@ actor PortfolioEngine {
         
         // Handle special case for lastUpdate
         if period == .lastUpdate && startDate == nil {
-            // Show from second-to-last portfolio point
+            // For "Since Last Update", we need exactly the last 2 points
             if fullTimeline.count >= 2 {
-                let secondToLastDate = fullTimeline[fullTimeline.count - 2].date
-                return filterPortfolioTimeline(fullTimeline, from: secondToLastDate)
+                let lastTwoPoints = Array(fullTimeline.suffix(2))
+                return lastTwoPoints
             }
             return fullTimeline
         }
@@ -297,5 +427,28 @@ actor PortfolioEngine {
         filteredPoints.append(contentsOf: portfolioPoints.filter { $0.date >= startDate })
         
         return filteredPoints
+    }
+    
+    // MARK: - Private Helper Methods
+    
+    private func getAllUpdatesAfter(_ date: Date, from accounts: [Account]) -> [AccountUpdate] {
+        return accounts
+            .flatMap { $0.updates }
+            .filter { $0.date > date }
+            .sorted { $0.date < $1.date }
+    }
+    
+    private func getAllValidHistory() -> [PortfolioHistory] {
+        let descriptor = FetchDescriptor<PortfolioHistory>(
+            predicate: #Predicate { $0.isValid == true },
+            sortBy: [SortDescriptor(\.date, order: .forward)]
+        )
+        
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            print("Error fetching valid history: \(error)")
+            return []
+        }
     }
 }

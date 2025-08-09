@@ -346,16 +346,32 @@ struct DashboardView: View {
     
     private func deleteAccounts(offsets: IndexSet) {
         withAnimation {
+            var earliestDeletedDate: Date?
+            
             for index in offsets {
                 let accountToDelete = accounts[index]
                 
-                // SIMPLIFIED: Just delete the account - charts update automatically
+                // Find the earliest update date from this account to invalidate history
+                if let firstUpdate = accountToDelete.updates.sorted(by: { $0.date < $1.date }).first {
+                    if earliestDeletedDate == nil || firstUpdate.date < earliestDeletedDate! {
+                        earliestDeletedDate = firstUpdate.date
+                    }
+                }
+                
+                // Delete the account - SwiftData will cascade delete updates
                 modelContext.delete(accountToDelete)
             }
             
             // Save changes
             do {
                 try modelContext.save()
+                
+                // Invalidate portfolio history from the earliest deleted account's first update
+                if let earliestDate = earliestDeletedDate {
+                    Task {
+                        await portfolioEngine?.invalidateHistoryAfter(earliestDate)
+                    }
+                }
             } catch {
                 print("Error deleting accounts: \(error)")
             }
