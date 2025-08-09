@@ -14,6 +14,14 @@ struct DashboardView: View {
     @State private var showingAddAccount = false
     @State private var selectedPeriod: PerformanceCalculationService.TimePeriod = .lastUpdate
     
+    // Portfolio Engine for background calculations
+    @State private var portfolioEngine: PortfolioEngine?
+    
+    // Async calculation results
+    @State private var portfolioPerformanceData: (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) = (0, 0, true, false, "")
+    @State private var portfolioTimeline: [ChartDataPoint] = []
+    @State private var isCalculating = false
+    
     var body: some View {
         NavigationStack {
             List {
@@ -35,28 +43,33 @@ struct DashboardView: View {
                         }
                         
                         // Portfolio Performance Display
-                        if portfolioPerformance.hasData {
+                        if portfolioPerformanceData.hasData {
                             HStack {
-                                Text(portfolioPerformance.actualPeriodLabel)
+                                Text(portfolioPerformanceData.actualPeriodLabel)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 
                                 Spacer()
                                 
-                                HStack(spacing: 4) {
-                                    Text("\(portfolioPerformance.isPositive ? "" : "-")\(abs(portfolioPerformance.percentage), specifier: "%.1f")%")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(portfolioPerformance.isPositive ? .green : .red)
-                                        .minimumScaleFactor(0.7)
-                                        .lineLimit(1)
-                                    
-                                    Text("(\(portfolioPerformance.isPositive ? "" : "-")£\(abs(portfolioPerformance.absolute).formatted()))")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(portfolioPerformance.isPositive ? .green : .red)
-                                        .minimumScaleFactor(0.7)
-                                        .lineLimit(1)
+                                if isCalculating {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                } else {
+                                    HStack(spacing: 4) {
+                                        Text("\(portfolioPerformanceData.isPositive ? "" : "-")\(abs(portfolioPerformanceData.percentage), specifier: "%.1f")%")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(portfolioPerformanceData.isPositive ? .green : .red)
+                                            .minimumScaleFactor(0.7)
+                                            .lineLimit(1)
+                                        
+                                        Text("(\(portfolioPerformanceData.isPositive ? "" : "-")£\(abs(portfolioPerformanceData.absolute).formatted()))")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(portfolioPerformanceData.isPositive ? .green : .red)
+                                            .minimumScaleFactor(0.7)
+                                            .lineLimit(1)
+                                    }
                                 }
                             }
                         }
@@ -76,12 +89,17 @@ struct DashboardView: View {
                 // Portfolio Value Chart Section
                 Section("Portfolio Chart") {
                     VStack(spacing: 12) {
-                        PortfolioChart(accounts: accounts, startDate: portfolioChartStartDate)
-                            .frame(height: 200)
-                            .id("\(accounts.count)-\(totalUpdateCount)-\(selectedPeriod.rawValue)") // Force refresh when accounts, updates, or period changes
+                        if portfolioTimeline.isEmpty && isCalculating {
+                            ProgressView("Calculating...")
+                                .frame(height: 200)
+                        } else {
+                            PortfolioChart(data: portfolioTimeline)
+                                .frame(height: 200)
+                                .id("\(portfolioTimeline.count)-\(selectedPeriod.rawValue)") // Force refresh when timeline or period changes
+                        }
                         
                         HStack {
-                            Text("Based on \(totalUpdateCount) account updates")
+                            Text("Based on \(portfolioTimeline.count) data points")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -156,6 +174,54 @@ struct DashboardView: View {
                 debugTestDataButton
                 #endif
             }
+            .task {
+                // Initialize portfolio engine with model context
+                if portfolioEngine == nil {
+                    portfolioEngine = PortfolioEngine(modelContainer: modelContext.container)
+                }
+                await updatePortfolioData()
+            }
+            .onChange(of: selectedPeriod) { _, _ in
+                Task {
+                    await updatePortfolioData()
+                }
+            }
+            .onChange(of: accounts.count) { _, _ in
+                Task {
+                    await updatePortfolioData()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Async Data Updates
+    
+    private func updatePortfolioData() async {
+        guard let engine = portfolioEngine else { return }
+        
+        isCalculating = true
+        defer { isCalculating = false }
+        
+        // Calculate performance data on background actor
+        async let performanceTask = engine.calculatePortfolioPerformance(
+            accounts: activeAccounts,
+            period: selectedPeriod
+        )
+        
+        // Generate timeline on background actor
+        async let timelineTask = engine.generateFilteredPortfolioTimeline(
+            accounts: activeAccounts,
+            startDate: portfolioChartStartDate,
+            period: selectedPeriod
+        )
+        
+        // Await both results
+        let (performance, timeline) = await (performanceTask, timelineTask)
+        
+        // Update UI on main thread
+        await MainActor.run {
+            self.portfolioPerformanceData = performance
+            self.portfolioTimeline = timeline
         }
     }
     
@@ -217,30 +283,14 @@ struct DashboardView: View {
         }
     }
     
-    private var portfolioPerformance: (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
-        switch selectedPeriod {
-        case .lastUpdate:
-            return PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: activeAccounts)
-        case .oneMonth:
-            return PerformanceCalculationService.calculatePortfolioChangeOneMonth(accounts: activeAccounts)
-        case .oneYear:
-            return PerformanceCalculationService.calculatePortfolioChangeOneYear(accounts: activeAccounts)
-        case .allTime:
-            return PerformanceCalculationService.calculatePortfolioChangeAllTime(accounts: activeAccounts)
-        }
-    }
-    
     private var portfolioChartStartDate: Date? {
         let calendar = Calendar.current
         
         switch selectedPeriod {
         case .lastUpdate:
-            // Generate portfolio timeline and use second-to-last portfolio point
-            let portfolioPoints = generatePortfolioTimeline()
-            if portfolioPoints.count >= 2 {
-                return portfolioPoints[portfolioPoints.count - 2].date
-            }
-            return nil
+            // For last update, we'll calculate this in the engine
+            // The engine will determine the second-to-last portfolio point
+            return nil // Let engine handle this case
         case .oneMonth:
             return calendar.date(byAdding: .day, value: -30, to: Date())
         case .oneYear:
@@ -248,32 +298,6 @@ struct DashboardView: View {
         case .allTime:
             return nil // Show all data
         }
-    }
-    
-    // PERFORMANCE: Generate portfolio timeline (shared with PortfolioChart logic)
-    private func generatePortfolioTimeline() -> [ChartDataPoint] {
-        // Get all updates from all active accounts, sorted chronologically
-        let allUpdates = activeAccounts.flatMap { $0.updates }
-            .sorted { $0.date < $1.date }
-        
-        guard !allUpdates.isEmpty else { 
-            return [] 
-        }
-        
-        var portfolioPoints: [ChartDataPoint] = []
-        var currentAccountValues: [String: Decimal] = [:] // Track running account values
-        
-        // For each update, recalculate portfolio total incrementally
-        for update in allUpdates {
-            // Update this account's current value
-            currentAccountValues[update.account?.name ?? ""] = update.value
-            
-            // Calculate portfolio total from current values
-            let portfolioTotal = currentAccountValues.values.reduce(0, +)
-            portfolioPoints.append(ChartDataPoint(date: update.date, value: portfolioTotal))
-        }
-        
-        return portfolioPoints
     }
     
     private func contextLabel(for account: Account, period: PerformanceCalculationService.TimePeriod) -> String {

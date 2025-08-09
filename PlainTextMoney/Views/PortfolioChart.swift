@@ -13,6 +13,7 @@ struct PortfolioChart: View {
     let startDate: Date?
     let height: CGFloat
     let interpolationMethod: InterpolationMethod
+    let preCalculatedData: [ChartDataPoint]?
     
     init(accounts: [Account], startDate: Date? = nil, height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
         // Filter for active accounts only
@@ -20,10 +21,25 @@ struct PortfolioChart: View {
         self.startDate = startDate
         self.height = height
         self.interpolationMethod = interpolationMethod
+        self.preCalculatedData = nil
+    }
+    
+    init(data: [ChartDataPoint], height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
+        // Use pre-calculated data
+        self.accounts = []
+        self.startDate = nil
+        self.height = height
+        self.interpolationMethod = interpolationMethod
+        self.preCalculatedData = data
     }
     
     // PERFORMANCE: Incremental portfolio calculation from updates only
     private var chartDataPoints: [ChartDataPoint] {
+        // Use pre-calculated data if available
+        if let preCalculatedData = preCalculatedData {
+            return preCalculatedData
+        }
+        
         // Get all updates from all active accounts, sorted chronologically
         let allUpdates = accounts.flatMap { $0.updates }
             .sorted { $0.date < $1.date }
