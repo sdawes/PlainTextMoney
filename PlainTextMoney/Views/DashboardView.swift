@@ -366,12 +366,7 @@ struct DashboardView: View {
             do {
                 try modelContext.save()
                 
-                // Invalidate portfolio history from the earliest deleted account's first update
-                if let earliestDate = earliestDeletedDate {
-                    Task {
-                        await portfolioEngine?.invalidateHistoryAfter(earliestDate)
-                    }
-                }
+                // NOTE: Portfolio history invalidation disabled (incremental history system removed)
             } catch {
                 print("Error deleting accounts: \(error)")
             }

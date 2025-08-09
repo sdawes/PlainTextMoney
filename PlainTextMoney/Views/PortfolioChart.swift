@@ -186,7 +186,7 @@ struct PortfolioChart: View {
                 .symbolSize(8)
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                AxisMarks(values: .automatic(desiredCount: 2)) { _ in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                         .foregroundStyle(.gray.opacity(0.2))
                     AxisValueLabel()
