@@ -14,7 +14,7 @@ struct PlainTextMoneyApp: App {
     
     init() {
         do {
-            container = try ModelContainer(for: Account.self, AccountUpdate.self, PortfolioHistory.self)
+            container = try ModelContainer(for: Account.self, AccountUpdate.self)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

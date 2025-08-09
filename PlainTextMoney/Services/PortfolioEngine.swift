@@ -123,23 +123,11 @@ actor PortfolioEngine {
     
     // MARK: - Portfolio Timeline Generation
     
-    /// Generate portfolio timeline points using incremental history for optimal performance
+    /// Generate portfolio timeline points using legacy method (disabled incremental for now)
     /// - Parameter accounts: Active accounts to include in timeline
     /// - Returns: Array of chart data points representing portfolio value over time
     func generatePortfolioTimeline(accounts: [Account]) async -> [ChartDataPoint] {
-        do {
-            // Try incremental history approach
-            let historyPoints = await ensurePortfolioHistoryUpToDate(accounts: accounts)
-            
-            // If we got valid history points, use them
-            if !historyPoints.isEmpty {
-                return historyPoints.map { $0.toChartDataPoint() }
-            }
-        } catch {
-            print("❌ Incremental history failed, falling back to legacy: \(error)")
-        }
-        
-        // Fallback to legacy timeline generation
+        // TEMPORARILY: Use only legacy timeline generation to debug chart issue
         print("📊 Using legacy timeline generation")
         return await generatePortfolioTimelineLegacy(accounts: accounts)
     }
@@ -192,6 +180,16 @@ actor PortfolioEngine {
             // For "Since Last Update", we need exactly the last 2 points
             if fullTimeline.count >= 2 {
                 let lastTwoPoints = Array(fullTimeline.suffix(2))
+                
+                // DEBUG: Log the actual data points for debugging
+                print("🔍 DEBUG: Since Last Update - Full timeline has \(fullTimeline.count) points")
+                print("🔍 DEBUG: Last 2 points:")
+                for (index, point) in lastTwoPoints.enumerated() {
+                    print("   Point \(index + 1): Date=\(point.date), Value=£\(point.value)")
+                }
+                print("🔍 DEBUG: Values identical? \(lastTwoPoints[0].value == lastTwoPoints[1].value)")
+                print("🔍 DEBUG: Dates identical? \(lastTwoPoints[0].date == lastTwoPoints[1].date)")
+                
                 return lastTwoPoints
             }
             return fullTimeline

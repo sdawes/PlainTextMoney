@@ -37,6 +37,11 @@ struct PortfolioChart: View {
     private var chartDataPoints: [ChartDataPoint] {
         // Use pre-calculated data if available
         if let preCalculatedData = preCalculatedData {
+            // DEBUG: Log chart data being used
+            print("📊 DEBUG: PortfolioChart using pre-calculated data with \(preCalculatedData.count) points:")
+            for (index, point) in preCalculatedData.enumerated() {
+                print("   Chart Point \(index + 1): Date=\(point.date), Value=£\(point.value)")
+            }
             return preCalculatedData
         }
         
@@ -99,9 +104,30 @@ struct PortfolioChart: View {
         return filteredPoints
     }
     
+    // CHART FIX: Ensure identical values still render properly as a line
+    private var processedChartDataPoints: [ChartDataPoint] {
+        let points = chartDataPoints
+        
+        // If we have exactly 2 points with identical values, add a tiny offset to make the line visible
+        if points.count == 2 && points[0].value == points[1].value {
+            print("🎯 CHART FIX: Detected identical values (\(points[0].value)), adding tiny visual offset")
+            
+            // Create new points with a minimal difference to make line render
+            let offsetValue = points[0].value * 0.0001  // 0.01% offset - invisible to user but charts can render
+            var processedPoints = points
+            processedPoints[0] = ChartDataPoint(
+                date: points[0].date, 
+                value: points[0].value - offsetValue
+            )
+            return processedPoints
+        }
+        
+        return points
+    }
+    
     private var chartDateRange: ClosedRange<Date> {
-        guard let firstDate = chartDataPoints.first?.date,
-              let lastDate = chartDataPoints.last?.date else {
+        guard let firstDate = processedChartDataPoints.first?.date,
+              let lastDate = processedChartDataPoints.last?.date else {
             let today = Date()
             return today...today
         }
@@ -126,7 +152,7 @@ struct PortfolioChart: View {
                 .foregroundColor(.secondary)
                 .frame(height: height)
         } else {
-            Chart(chartDataPoints, id: \.date) { dataPoint in
+            Chart(processedChartDataPoints, id: \.date) { dataPoint in
                 // Light gradient area underneath the line
                 AreaMark(
                     x: .value("Date", dataPoint.date),
