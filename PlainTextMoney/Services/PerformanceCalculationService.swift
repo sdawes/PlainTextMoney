@@ -103,8 +103,8 @@ struct PerformanceCalculationService {
             let change = (absoluteChange / previousUpdate.value) * 100
             percentage = Double(truncating: change as NSNumber)
         } else {
-            // Handle edge case where previous value was 0
-            percentage = 0.0
+            // Handle edge case where previous value was 0 - can't calculate meaningful percentage
+            return (0.0, 0, true, false)
         }
         
         return (percentage, absoluteChange, isPositive, true)

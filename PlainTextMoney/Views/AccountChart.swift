@@ -8,7 +8,7 @@
 import SwiftUI
 import Charts
 
-struct ChartDataPoint {
+struct ChartDataPoint: Equatable {
     let date: Date
     let value: Decimal
     
