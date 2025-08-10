@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 
+@MainActor
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
@@ -194,6 +195,12 @@ struct DashboardView: View {
         }
     }
     
+    // MARK: - Helper Methods
+    
+    private func accountIDsSnapshot() -> [PersistentIdentifier] {
+        activeAccounts.map(\.persistentModelID)
+    }
+    
     // MARK: - Async Data Updates
     
     private func updatePortfolioData() async {
@@ -202,15 +209,18 @@ struct DashboardView: View {
         isCalculating = true
         defer { isCalculating = false }
         
+        // Extract account IDs safely on MainActor
+        let accountIDs = accountIDsSnapshot()
+        
         // Calculate performance data on background actor
         async let performanceTask = engine.calculatePortfolioPerformance(
-            accounts: activeAccounts,
+            accountIDs: accountIDs,
             period: selectedPeriod
         )
         
         // Generate timeline on background actor
         async let timelineTask = engine.generateFilteredPortfolioTimeline(
-            accounts: activeAccounts,
+            accountIDs: accountIDs,
             startDate: portfolioChartStartDate,
             period: selectedPeriod
         )

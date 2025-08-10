@@ -312,7 +312,7 @@ class TestDataGenerator {
         // ~104 updates per year * 5 years = ~520 updates per account
         while currentDate < endDate {
             // Generate 2 updates for this week
-            for updateInWeek in 0..<2 {
+            for _ in 0..<2 {
                 // Random day within the week
                 let dayOffset = Int.random(in: 0...6) // 0-6 days from start of week
                 

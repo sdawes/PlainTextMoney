@@ -22,6 +22,52 @@ I'm building a SwiftData app and need you to follow these performance optimizati
 - Use `await Task.yield()` in long-running operations
 - Avoid SwiftData operations in computed properties - they can trigger on background threads
 
+### 2.1 Swift 6 + SwiftData Actor Isolation (NEW - 2025)
+**Critical for Swift 6 language mode projects:**
+
+#### Project Configuration
+- Set `SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated` in project settings
+- Do NOT set SwiftData models as `nonisolated` (breaks SwiftData macros)
+- Explicitly mark all SwiftUI views as `@MainActor`
+
+#### Cross-Actor Communication Pattern
+```swift
+// ✅ CORRECT: MainActor extracts IDs, background actor re-fetches
+@MainActor
+struct MyView: View {
+    private func accountIDsSnapshot() -> [PersistentIdentifier] {
+        accounts.map(\.persistentModelID) // Safe on MainActor
+    }
+    
+    private func updateData() async {
+        let accountIDs = accountIDsSnapshot()
+        await backgroundEngine.process(accountIDs: accountIDs) // Pass IDs only
+    }
+}
+
+@ModelActor
+actor BackgroundEngine {
+    func process(accountIDs: [PersistentIdentifier]) async {
+        let accounts = fetchAccounts(withIDs: accountIDs) // Re-fetch in actor
+        // Process accounts safely...
+    }
+    
+    private func fetchAccounts(withIDs ids: [PersistentIdentifier]) -> [Account] {
+        let descriptor = FetchDescriptor<Account>(
+            predicate: #Predicate { ids.contains($0.persistentModelID) }
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+}
+```
+
+#### Actor Isolation Rules
+- ❌ NEVER pass SwiftData models between actors
+- ✅ ALWAYS pass `PersistentIdentifier` (Sendable) between actors
+- ✅ Each actor re-fetches models using its own ModelContext
+- ✅ Use `@ModelActor` for background SwiftData operations
+- ✅ MainActor for all UI and @Query operations
+
 ### 3. UI Performance Rules
 - Cache expensive computations in view initializers, not computed properties
 - Limit chart data to reasonable amounts (300-500 points max)
@@ -80,6 +126,14 @@ func calculateWithCache(accounts: [Account]) -> PerformanceData {
 ❌ Generating the same timeline data multiple times
 ❌ Using individual update dates instead of portfolio timeline points
 ❌ Forgetting to handle edge cases (no data, single data point)
+
+### 8.1 Swift 6 Actor Isolation Anti-Patterns
+❌ Passing SwiftData models between actors (causes data races)
+❌ Using `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` with SwiftData
+❌ Making SwiftData models `nonisolated` (breaks macro generation)
+❌ Accessing MainActor-isolated properties from background actors
+❌ Sharing ModelContext instances between actors
+❌ Using `@MainActor.run` to "fix" actor isolation (masks real issues)
 
 ### 9. Performance Targets
 - ⚡ Database operations: <50ms

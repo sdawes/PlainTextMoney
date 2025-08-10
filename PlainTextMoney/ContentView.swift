@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 
+@MainActor
 struct ContentView: View {
     @State private var isLoading = true
     

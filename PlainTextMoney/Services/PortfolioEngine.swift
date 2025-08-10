@@ -20,35 +20,45 @@ actor PortfolioEngine {
     // MARK: - Portfolio Timeline Generation
     
     /// Generate portfolio timeline points using legacy method (disabled incremental for now)
-    /// - Parameter accounts: Active accounts to include in timeline
+    /// - Parameter accountIDs: IDs of accounts to include in timeline
     /// - Returns: Array of chart data points representing portfolio value over time
-    func generatePortfolioTimeline(accounts: [Account]) async -> [ChartDataPoint] {
+    func generatePortfolioTimeline(accountIDs: [PersistentIdentifier]) async -> [ChartDataPoint] {
         // TEMPORARILY: Use only legacy timeline generation to debug chart issue
         print("📊 Using legacy timeline generation")
-        return await generatePortfolioTimelineLegacy(accounts: accounts)
+        return await generatePortfolioTimelineLegacy(accountIDs: accountIDs)
     }
     
     /// Legacy method: Generate timeline by processing all updates (fallback for edge cases)
-    /// - Parameter accounts: Active accounts to include in timeline
+    /// - Parameter accountIDs: IDs of accounts to include in timeline
     /// - Returns: Array of chart data points representing portfolio value over time
-    func generatePortfolioTimelineLegacy(accounts: [Account]) async -> [ChartDataPoint] {
-        // Get all updates from all active accounts, sorted chronologically
-        let allUpdates = accounts
-            .filter { $0.isActive }
-            .flatMap { $0.updates }
-            .sorted { $0.date < $1.date }
+    func generatePortfolioTimelineLegacy(accountIDs: [PersistentIdentifier]) async -> [ChartDataPoint] {
+        // Fetch accounts using this actor's modelContext
+        let accounts = fetchAccounts(withIDs: accountIDs)
         
-        guard !allUpdates.isEmpty else { 
+        // Build updates with account ID mapping to avoid relationship issues
+        var allUpdatesWithAccountID: [(update: AccountUpdate, accountID: PersistentIdentifier)] = []
+        
+        for account in accounts.filter({ $0.isActive }) {
+            let accountID = account.persistentModelID
+            for update in account.updates {
+                allUpdatesWithAccountID.append((update: update, accountID: accountID))
+            }
+        }
+        
+        // Sort by date
+        allUpdatesWithAccountID.sort { $0.update.date < $1.update.date }
+        
+        guard !allUpdatesWithAccountID.isEmpty else { 
             return [] 
         }
         
         var portfolioPoints: [ChartDataPoint] = []
-        var currentAccountValues: [String: Decimal] = [:] // Track running account values
+        var currentAccountValues: [PersistentIdentifier: Decimal] = [:] // Track by stable ID
         
         // For each update, recalculate portfolio total incrementally
-        for update in allUpdates {
-            // Update this account's current value
-            currentAccountValues[update.account?.name ?? ""] = update.value
+        for (update, accountID) in allUpdatesWithAccountID {
+            // Update this account's current value using the mapped account ID
+            currentAccountValues[accountID] = update.value
             
             // Calculate portfolio total from current values
             let portfolioTotal = currentAccountValues.values.reduce(0, +)
@@ -60,16 +70,16 @@ actor PortfolioEngine {
     
     /// Generate filtered portfolio timeline for a specific period
     /// - Parameters:
-    ///   - accounts: Active accounts to include
+    ///   - accountIDs: IDs of accounts to include
     ///   - startDate: Optional start date for filtering (nil means handle intelligently based on period)
     ///   - period: The selected time period for intelligent filtering
     /// - Returns: Filtered array of chart data points
     func generateFilteredPortfolioTimeline(
-        accounts: [Account],
+        accountIDs: [PersistentIdentifier],
         startDate: Date?,
         period: PerformanceCalculationService.TimePeriod
     ) async -> [ChartDataPoint] {
-        let fullTimeline = await generatePortfolioTimeline(accounts: accounts)
+        let fullTimeline = await generatePortfolioTimeline(accountIDs: accountIDs)
         
         // Handle special case for lastUpdate
         if period == .lastUpdate && startDate == nil {
@@ -102,24 +112,28 @@ actor PortfolioEngine {
     
     /// Calculate portfolio performance for a specific time period
     /// - Parameters:
-    ///   - accounts: Active accounts to calculate
+    ///   - accountIDs: IDs of accounts to calculate
     ///   - period: Time period to calculate for
     /// - Returns: Performance data including percentage and absolute changes
     func calculatePortfolioPerformance(
-        accounts: [Account],
+        accountIDs: [PersistentIdentifier],
         period: PerformanceCalculationService.TimePeriod
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
+        // Fetch accounts and filter for active ones
+        let accounts = fetchAccounts(withIDs: accountIDs)
         let activeAccounts = accounts.filter { $0.isActive }
+        
+        let activeAccountIDs = activeAccounts.map { $0.persistentModelID }
         
         switch period {
         case .lastUpdate:
-            return await calculatePortfolioChangeFromLastUpdate(accounts: activeAccounts)
+            return await calculatePortfolioChangeFromLastUpdate(accountIDs: activeAccountIDs)
         case .oneMonth:
-            return await calculatePortfolioChangeOneMonth(accounts: activeAccounts)
+            return await calculatePortfolioChangeOneMonth(accountIDs: activeAccountIDs)
         case .oneYear:
-            return await calculatePortfolioChangeOneYear(accounts: activeAccounts)
+            return await calculatePortfolioChangeOneYear(accountIDs: activeAccountIDs)
         case .allTime:
-            return await calculatePortfolioChangeAllTime(accounts: activeAccounts)
+            return await calculatePortfolioChangeAllTime(accountIDs: activeAccountIDs)
         }
     }
     
@@ -147,9 +161,9 @@ actor PortfolioEngine {
     // MARK: - Private Calculation Methods
     
     private func calculatePortfolioChangeFromLastUpdate(
-        accounts: [Account]
+        accountIDs: [PersistentIdentifier]
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
-        let timeline = await generatePortfolioTimeline(accounts: accounts)
+        let timeline = await generatePortfolioTimeline(accountIDs: accountIDs)
         
         guard timeline.count >= 2 else {
             return (0, 0, true, false, "No previous update")
@@ -175,35 +189,35 @@ actor PortfolioEngine {
     }
     
     private func calculatePortfolioChangeOneMonth(
-        accounts: [Account]
+        accountIDs: [PersistentIdentifier]
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         let calendar = Calendar.current
         let oneMonthAgo = calendar.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         
         return await calculatePortfolioChangeForPeriod(
-            accounts: accounts,
+            accountIDs: accountIDs,
             startDate: oneMonthAgo,
             periodLabel: "Past month"
         )
     }
     
     private func calculatePortfolioChangeOneYear(
-        accounts: [Account]
+        accountIDs: [PersistentIdentifier]
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         let calendar = Calendar.current
         let oneYearAgo = calendar.date(byAdding: .day, value: -365, to: Date()) ?? Date()
         
         return await calculatePortfolioChangeForPeriod(
-            accounts: accounts,
+            accountIDs: accountIDs,
             startDate: oneYearAgo,
             periodLabel: "Past year"
         )
     }
     
     private func calculatePortfolioChangeAllTime(
-        accounts: [Account]
+        accountIDs: [PersistentIdentifier]
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
-        let timeline = await generatePortfolioTimeline(accounts: accounts)
+        let timeline = await generatePortfolioTimeline(accountIDs: accountIDs)
         
         guard let firstValue = timeline.first?.value,
               let lastValue = timeline.last?.value,
@@ -215,7 +229,7 @@ actor PortfolioEngine {
         let percentageChange = ((lastValue - firstValue) / firstValue) * 100
         
         let firstDate = timeline.first?.date ?? Date()
-        let periodLabel = "Since \(firstDate.formatted(date: .abbreviated, time: .omitted))"
+        let periodLabel = "Since \(firstDate.formatted(.dateTime.day().month(.abbreviated).year()))"
         
         return (
             Double(truncating: percentageChange as NSNumber),
@@ -227,11 +241,11 @@ actor PortfolioEngine {
     }
     
     private func calculatePortfolioChangeForPeriod(
-        accounts: [Account],
+        accountIDs: [PersistentIdentifier],
         startDate: Date,
         periodLabel: String
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
-        let timeline = await generatePortfolioTimeline(accounts: accounts)
+        let timeline = await generatePortfolioTimeline(accountIDs: accountIDs)
         
         // Find the value at or just before the start date
         var startValue: Decimal?
@@ -278,7 +292,7 @@ actor PortfolioEngine {
         // Determine actual period label
         let actualLabel: String
         if let actualStart = actualStartDate, actualStart > startDate {
-            actualLabel = "Since \(actualStart.formatted(date: .abbreviated, time: .omitted))"
+            actualLabel = "Since \(actualStart.formatted(.dateTime.day().month(.abbreviated).year()))"
         } else {
             actualLabel = periodLabel
         }
@@ -324,6 +338,26 @@ actor PortfolioEngine {
     }
     
     // MARK: - Private Helper Methods
+    
+    /// Fetch accounts by their persistent identifiers using this actor's modelContext
+    /// Following SwiftData best practices for cross-actor model access
+    private func fetchAccounts(withIDs ids: [PersistentIdentifier]) -> [Account] {
+        guard !ids.isEmpty else { return [] }
+        
+        // Use recommended FetchDescriptor pattern for actor-safe model fetching
+        let descriptor = FetchDescriptor<Account>(
+            predicate: #Predicate { account in
+                ids.contains(account.persistentModelID)
+            }
+        )
+        
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            print("⚠️ Error fetching accounts by IDs in PortfolioEngine: \(error)")
+            return []
+        }
+    }
     
     private func getAllUpdatesAfter(_ date: Date, from accounts: [Account]) -> [AccountUpdate] {
         return accounts

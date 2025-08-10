@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import Charts
 
+@MainActor
 struct AccountDetailView: View {
     let account: Account
     @Binding var selectedPeriod: PerformanceCalculationService.TimePeriod

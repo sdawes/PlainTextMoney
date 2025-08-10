@@ -315,6 +315,59 @@ private func updateAccount() async {
 }
 ```
 
+### 1.1 Swift 6 + SwiftData Actor Isolation (Critical 2025 Pattern)
+**Essential for Swift 6 language mode compatibility:**
+
+#### Project Configuration
+- **Default Actor Isolation**: Set to `nonisolated` in project settings
+- **SwiftUI Views**: Explicitly marked `@MainActor` for UI thread safety
+- **SwiftData Models**: Keep default isolation (NOT `nonisolated`)
+
+#### Cross-Actor Communication Pattern
+```swift
+@MainActor
+struct DashboardView: View {
+    // Extract IDs safely on MainActor before cross-actor calls
+    private func accountIDsSnapshot() -> [PersistentIdentifier] {
+        activeAccounts.map(\.persistentModelID)
+    }
+    
+    private func updatePortfolioData() async {
+        let accountIDs = accountIDsSnapshot() // MainActor-safe ID extraction
+        await portfolioEngine?.calculatePortfolioPerformance(
+            accountIDs: accountIDs, // Pass only Sendable IDs
+            period: selectedPeriod
+        )
+    }
+}
+
+@ModelActor
+actor PortfolioEngine {
+    func calculatePortfolioPerformance(
+        accountIDs: [PersistentIdentifier],
+        period: TimePeriod
+    ) async -> PerformanceData {
+        let accounts = fetchAccounts(withIDs: accountIDs) // Re-fetch in actor
+        // Safe background processing...
+    }
+    
+    private func fetchAccounts(withIDs ids: [PersistentIdentifier]) -> [Account] {
+        let descriptor = FetchDescriptor<Account>(
+            predicate: #Predicate { ids.contains($0.persistentModelID) }
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+}
+```
+
+#### Actor Isolation Rules (Swift 6)
+- ✅ **NEVER** pass SwiftData models between actors (causes data races)
+- ✅ **ALWAYS** pass `PersistentIdentifier` (Sendable) between actors
+- ✅ **Each actor** re-fetches models using its own ModelContext
+- ✅ **Background processing** uses `@ModelActor` for thread safety
+- ✅ **MainActor isolation** for all UI and `@Query` operations
+- ✅ **Project setting**: `SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated`
+
 ### 2. Financial Precision (Native Types)
 ```swift
 var value: Decimal  // Native precise decimal type, not Double
@@ -329,6 +382,13 @@ Calendar.current.startOfDay(for: date)  // Native date normalization
 - **No retain cycles**: Native weak references in closures
 - **No manual memory**: Native ARC handles all allocation/deallocation
 - **Native lifecycle**: SwiftUI manages view lifecycle automatically
+
+### 5. Swift 6 Concurrency Safety (2025 Standard)
+- **Actor isolation**: Prevents data races at compile time
+- **Sendable types**: Only pass safe types between actors
+- **Model re-fetching**: Each actor uses its own ModelContext
+- **UI thread safety**: Explicit `@MainActor` for all SwiftUI views
+- **Background actors**: Use `@ModelActor` for SwiftData operations
 
 ## Future Considerations - Staying Native
 

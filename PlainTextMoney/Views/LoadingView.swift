@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 
+@MainActor
 struct LoadingView: View {
     @State private var loadingProgress: Double = 0.0
     @State private var loadingText = "Initializing..."
