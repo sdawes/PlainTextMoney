@@ -7,6 +7,51 @@
 
 import SwiftUI
 import Charts
+import Foundation
+
+/// Context for smart X-axis labeling based on time period
+struct TimePeriodContext {
+    let period: PerformanceCalculationService.TimePeriod
+    let actualPeriodLabel: String
+    let dataPoints: [ChartDataPoint]
+    
+    var shouldShowXAxis: Bool {
+        switch period {
+        case .lastUpdate, .allTime:
+            return true  // Show contextual labels
+        case .oneMonth, .oneYear:
+            return false // Hide labels - period is obvious from selector
+        }
+    }
+    
+    var xAxisLabel: String? {
+        guard shouldShowXAxis else { return nil }
+        
+        switch period {
+        case .lastUpdate:
+            // Show the date of the last update
+            if let lastDate = dataPoints.last?.date {
+                return lastDate.formatted(.dateTime.day().month(.abbreviated).year())
+            }
+            return nil
+        case .allTime:
+            // Show date range
+            guard let firstDate = dataPoints.first?.date,
+                  let lastDate = dataPoints.last?.date else { return nil }
+            
+            let startFormatted = firstDate.formatted(.dateTime.month(.abbreviated).year())
+            let endFormatted = lastDate.formatted(.dateTime.month(.abbreviated).year())
+            
+            if startFormatted == endFormatted {
+                return startFormatted
+            } else {
+                return "\(startFormatted) - \(endFormatted)"
+            }
+        case .oneMonth, .oneYear:
+            return nil
+        }
+    }
+}
 
 struct PortfolioChart: View {
     let accounts: [Account]
@@ -14,6 +59,7 @@ struct PortfolioChart: View {
     let height: CGFloat
     let interpolationMethod: InterpolationMethod
     let preCalculatedData: [ChartDataPoint]?
+    let timePeriodContext: TimePeriodContext?
     
     init(accounts: [Account], startDate: Date? = nil, height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
         // Filter for active accounts only
@@ -22,15 +68,17 @@ struct PortfolioChart: View {
         self.height = height
         self.interpolationMethod = interpolationMethod
         self.preCalculatedData = nil
+        self.timePeriodContext = nil
     }
     
-    init(data: [ChartDataPoint], height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone) {
+    init(data: [ChartDataPoint], height: CGFloat = 200, interpolationMethod: InterpolationMethod = .monotone, timePeriodContext: TimePeriodContext? = nil) {
         // Use pre-calculated data
         self.accounts = []
         self.startDate = nil
         self.height = height
         self.interpolationMethod = interpolationMethod
         self.preCalculatedData = data
+        self.timePeriodContext = timePeriodContext
     }
     
     // PERFORMANCE: Incremental portfolio calculation from updates only
@@ -152,6 +200,7 @@ struct PortfolioChart: View {
                 .foregroundColor(.secondary)
                 .frame(height: height)
         } else {
+            VStack(spacing: 4) {
             Chart(processedChartDataPoints, id: \.date) { dataPoint in
                 // Light gradient area underneath the line
                 AreaMark(
@@ -186,12 +235,20 @@ struct PortfolioChart: View {
                 .symbolSize(8)
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 2)) { _ in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                        .foregroundStyle(.gray.opacity(0.2))
-                    AxisValueLabel()
-                        .foregroundStyle(.secondary)
-                        .font(.caption2)
+                if let context = timePeriodContext, context.shouldShowXAxis, context.xAxisLabel != nil {
+                    // Show smart contextual labeling with custom overlay
+                    AxisMarks(values: .automatic(desiredCount: 2)) { _ in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                            .foregroundStyle(.gray.opacity(0.2))
+                        // Hide default labels
+                    }
+                } else {
+                    // Hide X-axis labels for month/year periods or when no context
+                    AxisMarks(values: .automatic(desiredCount: 2)) { _ in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                            .foregroundStyle(.gray.opacity(0.2))
+                        // No labels
+                    }
                 }
             }
             .chartXScale(domain: chartDateRange)
@@ -209,6 +266,19 @@ struct PortfolioChart: View {
                 }
             }
             .frame(height: height)
+                
+                // Custom contextual label below chart for smart periods
+                if let context = timePeriodContext, 
+                   context.shouldShowXAxis, 
+                   let label = context.xAxisLabel {
+                    HStack {
+                        Text(label)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+            }
         }
     }
 }

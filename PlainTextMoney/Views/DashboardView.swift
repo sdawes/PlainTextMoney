@@ -94,9 +94,16 @@ struct DashboardView: View {
                             ProgressView("Calculating...")
                                 .frame(height: 200)
                         } else {
-                            PortfolioChart(data: portfolioTimeline)
-                                .frame(height: 200)
-                                .id("\(portfolioTimeline.count)-\(selectedPeriod.rawValue)") // Force refresh when timeline or period changes
+                            PortfolioChart(
+                                data: portfolioTimeline,
+                                timePeriodContext: TimePeriodContext(
+                                    period: selectedPeriod,
+                                    actualPeriodLabel: portfolioPerformanceData.actualPeriodLabel,
+                                    dataPoints: portfolioTimeline
+                                )
+                            )
+                            .frame(height: 200)
+                            .id("\(portfolioTimeline.count)-\(selectedPeriod.rawValue)") // Force refresh when timeline or period changes
                         }
                         
                         HStack {
