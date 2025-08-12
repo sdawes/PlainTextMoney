@@ -405,8 +405,237 @@ Calendar.current.startOfDay(for: date)  // Native date normalization
 - **No performance hacks**: Trust native framework optimization
 - **No architectural complexity**: Follow native SwiftUI patterns
 
+## Test-Driven Development Requirements
+
+### CRITICAL: Write Tests for Every New Feature
+**When adding ANY new functionality to this app, you MUST:**
+
+1. **Write tests FIRST or ALONGSIDE the implementation**
+   - Never add features without corresponding tests
+   - Tests protect against regression when refactoring
+   - Tests document expected behavior
+
+2. **Test Coverage Requirements**
+   ```swift
+   // For each new feature, create tests covering:
+   - ✅ Happy path (normal expected usage)
+   - ✅ Edge cases (boundary conditions, empty data)
+   - ✅ Error conditions (invalid input, zero values)
+   - ✅ Performance (operations complete < 200ms)
+   ```
+
+3. **Test File Organization**
+   ```
+   PlainTextMoneyTests/
+   ├── ServiceTests/           # Business logic tests
+   ├── ModelTests/            # Data model tests
+   ├── ViewTests/             # UI behavior tests
+   └── IntegrationTests/      # End-to-end tests
+   ```
+
+4. **Example Test Pattern for New Features**
+   ```swift
+   func testNewFeature_NormalCase() throws {
+       // Given: Setup test data
+       let account = TestHelpers.createTestAccount(name: "Test", in: context)
+       
+       // When: Execute feature
+       let result = NewFeature.calculate(account: account)
+       
+       // Then: Verify expectations
+       XCTAssertEqual(result.value, expectedValue)
+       XCTAssertTrue(result.isValid)
+   }
+   
+   func testNewFeature_EdgeCase_NoData() throws {
+       // Always test empty/nil scenarios
+   }
+   
+   func testNewFeature_Performance() async throws {
+       // Ensure feature completes quickly
+       let start = Date()
+       _ = await feature.execute()
+       let elapsed = Date().timeIntervalSince(start)
+       XCTAssertLessThan(elapsed, 0.2) // 200ms max
+   }
+   ```
+
+### Test Commands
+```bash
+# Run all tests via command line
+xcodebuild test -project PlainTextMoney.xcodeproj -scheme PlainTextMoney -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5'
+
+# Run tests in Xcode
+# 1. Stop any running simulators first
+# 2. Press Cmd+U
+```
+
+## Development Workflow
+
+### 1. Before Starting Any Task
+- Review this CLAUDE.md file for project conventions
+- Check existing tests to understand current behavior
+- Plan test cases for new functionality
+
+### 2. Implementation Process
+```
+1. Create/update tests for new functionality
+2. Implement the feature
+3. Run tests to verify (Cmd+U)
+4. Check for performance regressions
+5. Update documentation if needed
+```
+
+### 3. Before Committing
+- ✅ All tests must pass
+- ✅ No debug print statements in production code
+- ✅ Performance targets met (<200ms for calculations)
+- ✅ SwiftData models properly annotated
+- ✅ Actor isolation rules followed
+
+### 4. Commit Message Format
+```
+Type: Brief description
+
+• Bullet point details of changes
+• Include test coverage added
+• Note any performance improvements
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+## Performance Monitoring
+
+### Performance Targets
+- **Database queries**: <50ms
+- **UI updates**: <100ms  
+- **Complex calculations**: <200ms
+- **Chart rendering**: <150ms for 500+ points
+- **Test execution**: <5s for full suite
+
+### Performance Testing Pattern
+```swift
+// Add performance tests for critical paths
+func testPerformanceCriticalOperation() throws {
+    measure {
+        // Code to benchmark
+        _ = service.expensiveOperation()
+    }
+}
+```
+
+### Caching Strategy
+All expensive calculations MUST implement caching:
+```swift
+private var cache: [String: (data: Any, hash: Int)] = [:]
+
+func calculate(params: Params) -> Result {
+    let hash = params.hashValue
+    if let cached = cache[key], cached.hash == hash {
+        return cached.data
+    }
+    // Calculate and cache
+}
+```
+
+## Debugging & Troubleshooting
+
+### Common Issues & Solutions
+
+**Xcode Test Runner Error (Mach error -308)**
+```bash
+# Solution: Clean and reset
+rm -rf ~/Library/Developer/Xcode/DerivedData
+xcrun simctl shutdown all
+xcrun simctl erase all
+```
+
+**Simulator Cloning Issues**
+- Stop simulator before running tests (Cmd+U)
+- Use consistent device: iPhone 16, iOS 18.5
+- Close iOS Simulator app between test runs
+
+**SwiftData Model Not Found in Tests**
+```swift
+// Explicitly register models in test setup
+let container = try ModelContainer(
+    for: Account.self, AccountUpdate.self,
+    configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+)
+```
+
+**Chart Not Updating**
+```swift
+// Force refresh with identity change
+chart.id("\(accounts.count)-\(updateCount)")
+```
+
+### Debug Helpers
+```swift
+#if DEBUG
+// Conditional debug features
+TestDataGenerator.shared.generateTestData()
+#endif
+```
+
+## Project-Specific Commands
+
+### Build & Test
+```bash
+# Build project
+xcodebuild build -project PlainTextMoney.xcodeproj -scheme PlainTextMoney
+
+# Run tests
+xcodebuild test -project PlainTextMoney.xcodeproj -scheme PlainTextMoney -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5'
+
+# Clean build folder
+xcodebuild clean -project PlainTextMoney.xcodeproj -scheme PlainTextMoney
+```
+
+### Git Workflow
+```bash
+# Before committing, always:
+# 1. Run tests
+# 2. Check for uncommitted files
+git status
+
+# Commit with co-author
+git commit -m "Your message
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Push to main
+git push origin main
+```
+
+## Code Quality Checklist
+
+Before ANY code changes:
+- [ ] Tests written for new functionality
+- [ ] All existing tests still pass
+- [ ] Performance targets met
+- [ ] No compiler warnings
+- [ ] SwiftData models properly configured
+- [ ] Actor isolation correct (@MainActor for UI)
+- [ ] Financial values use Decimal (not Double)
+- [ ] Debug logging disabled for production
+- [ ] Chart updates use proper identity management
+- [ ] Memory management verified (no retain cycles)
+
 ## Summary
 
 This app represents a **pure native iOS implementation** using only Apple's frameworks and design patterns. Every aspect - from data storage to user interface - follows native iOS conventions, ensuring maximum reliability, performance, and user familiarity while maintaining the simplicity of a direct update-only architecture.
 
 The result is a fast, reliable financial tracking app that feels completely native to iOS users and leverages the full power of Apple's development ecosystem.
+
+**Key Success Factors:**
+- Comprehensive test coverage ensuring reliability
+- Performance optimization with smart caching
+- Swift 6 concurrency safety with proper actor isolation
+- Native-first approach with zero external dependencies
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

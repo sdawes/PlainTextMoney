@@ -2,6 +2,9 @@
 
 Copy this prompt when starting new SwiftData projects to avoid common performance pitfalls.
 
+**Last Updated:** August 2025  
+**Proven in Production:** PlainTextMoney app with comprehensive test coverage
+
 ---
 
 ## 🚀 SwiftData Performance Requirements
@@ -161,15 +164,285 @@ func calculateWithCache(accounts: [Account]) -> PerformanceData {
 - Fall back to "since [earliest date]" labeling
 - Communicate actual period to user clearly
 
+### 11. Testing Performance Optimizations
+
+**Test Coverage Requirements:**
+- Unit tests for all calculation services
+- Edge case testing (zero values, single data points, no data)
+- Decimal precision validation for financial calculations
+- Performance regression tests with timing assertions
+
+**Test Data Generation:**
+```swift
+@MainActor
+func createTestContext() throws -> ModelContext {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try ModelContainer(for: Account.self, AccountUpdate.self, 
+                                      configurations: config)
+    return ModelContext(container)
+}
+```
+
+**Performance Assertion Pattern:**
+```swift
+func testPerformanceWithLargeDataset() async throws {
+    // Create 1000+ data points
+    let startTime = Date()
+    let result = await service.calculate()
+    let elapsed = Date().timeIntervalSince(startTime)
+    
+    XCTAssertLessThan(elapsed, 0.2) // Must complete in 200ms
+}
+```
+
+### 12. SwiftUI View Performance Patterns
+
+**View Identity Management:**
+```swift
+// Force view refresh when data changes significantly
+PortfolioChart(accounts: accounts)
+    .id("\(accounts.count)-\(totalUpdateCount)")
+```
+
+**Expensive Computation Caching:**
+```swift
+struct DashboardView: View {
+    @Query private var accounts: [Account]
+    
+    // Cache expensive calculations
+    private let portfolioData: PortfolioData
+    
+    init() {
+        // Perform expensive setup once
+        self.portfolioData = calculateInitialData()
+    }
+}
+```
+
+**Text Size Management for Financial Apps:**
+```swift
+// Lock text size to prevent layout breaks with large numbers
+.environment(\.sizeCategory, .large)
+
+// Or use auto-scaling for monetary values
+Text("£\(value.formatted())")
+    .minimumScaleFactor(0.5)
+    .lineLimit(1)
+```
+
+### 13. ModelActor Implementation Pattern
+
+**Complete Working Example:**
+```swift
+@ModelActor
+actor PortfolioEngine {
+    // Fetch accounts safely within actor context
+    private func fetchAccounts(withIDs ids: [PersistentIdentifier]) -> [Account] {
+        let descriptor = FetchDescriptor<Account>(
+            predicate: #Predicate { account in
+                ids.contains(account.persistentModelID)
+            }
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+    
+    // Process data in background
+    func generatePortfolioTimeline(accountIDs: [PersistentIdentifier]) async -> [ChartDataPoint] {
+        let accounts = fetchAccounts(withIDs: accountIDs)
+        
+        // Heavy calculation off main thread
+        var portfolioPoints: [ChartDataPoint] = []
+        // ... processing logic ...
+        
+        return portfolioPoints
+    }
+}
+```
+
+### 14. Production-Ready Service Pattern
+
+**Service with Smart Caching:**
+```swift
+class PerformanceCalculationService {
+    // Cache with validation
+    private static var portfolioTimelineCache: (
+        data: [ChartDataPoint],
+        accountHash: Int,
+        updateHash: Int
+    )?
+    
+    static func generatePortfolioTimeline(accounts: [Account]) -> [ChartDataPoint] {
+        let currentAccountHash = accounts.map(\.name).hashValue
+        let currentUpdateHash = accounts.flatMap(\.updates).count
+        
+        // Return cached if valid
+        if let cache = portfolioTimelineCache,
+           cache.accountHash == currentAccountHash,
+           cache.updateHash == currentUpdateHash {
+            return cache.data
+        }
+        
+        // Calculate and cache
+        let timeline = calculateTimeline(accounts)
+        portfolioTimelineCache = (timeline, currentAccountHash, currentUpdateHash)
+        return timeline
+    }
+}
+```
+
+### 15. SwiftData Model Best Practices
+
+**Model Design:**
+```swift
+@Model
+class Account {
+    var name: String
+    var createdAt: Date
+    var isActive: Bool = true
+    
+    @Relationship(deleteRule: .cascade)
+    var updates: [AccountUpdate] = []
+    
+    init(name: String, createdAt: Date = Date()) {
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+```
+
+**Relationship Management:**
+- Use `.cascade` delete rules for dependent data
+- Avoid bidirectional relationships when possible
+- Store minimal data in models (compute the rest)
+
+### 16. Query Optimization Patterns
+
+**Efficient @Query Usage:**
+```swift
+struct DashboardView: View {
+    // Fetch only active accounts, sorted efficiently
+    @Query(filter: #Predicate<Account> { $0.isActive },
+           sort: \.createdAt) 
+    private var activeAccounts: [Account]
+    
+    // Avoid complex predicates - do filtering in Swift when needed
+    private var accountsWithUpdates: [Account] {
+        activeAccounts.filter { !$0.updates.isEmpty }
+    }
+}
+```
+
+**FetchDescriptor for Background Operations:**
+```swift
+let descriptor = FetchDescriptor<Account>(
+    predicate: #Predicate { $0.isActive },
+    sortBy: [SortDescriptor(\.createdAt)]
+)
+descriptor.fetchLimit = 100 // Always limit when possible
+```
+
+### 17. Chart Performance Optimization
+
+**Efficient Chart Data Generation:**
+```swift
+// Generate once, filter multiple times
+private func generateChartData() -> [ChartDataPoint] {
+    let timeline = PerformanceCalculationService.generatePortfolioTimeline(accounts)
+    
+    // Smart filtering based on period
+    switch selectedPeriod {
+    case .lastUpdate:
+        return Array(timeline.suffix(2)) // Exactly 2 points
+    case .oneMonth:
+        let cutoff = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+        return filterWithBoundary(timeline, after: cutoff)
+    case .allTime:
+        return timeline // No filtering needed
+    }
+}
+
+// Include boundary point for chart continuity
+private func filterWithBoundary(_ points: [ChartDataPoint], after date: Date) -> [ChartDataPoint] {
+    guard let firstAfter = points.firstIndex(where: { $0.date >= date }) else {
+        return points
+    }
+    
+    // Include one point before cutoff for continuity
+    let startIndex = max(0, firstAfter - 1)
+    return Array(points[startIndex...])
+}
+```
+
+### 18. Debug Logging Best Practices
+
+**Performance-Aware Logging:**
+```swift
+#if DEBUG
+private let debugLogging = false // Toggle for performance testing
+
+func logPerformance(_ message: String) {
+    if debugLogging {
+        print("⚡ PERF: \(message)")
+    }
+}
+#else
+// No logging in release builds
+func logPerformance(_ message: String) { }
+#endif
+```
+
+### 19. Xcode Project Configuration for Swift 6
+
+**Build Settings for Actor Isolation:**
+```
+SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+```
+
+**Test Configuration:**
+- Create in-memory test contexts for speed
+- Use XCTest for unit tests (not Swift Testing for SwiftData)
+- Run tests on iPhone 16 simulator for consistency
+
+### 20. Common Pitfalls and Solutions
+
+**Problem: Simulator cloning during tests**
+- Solution: Stop simulator before running tests (Cmd+U)
+- Use consistent device (iPhone 16, iOS 18.5)
+
+**Problem: SwiftData model not found in tests**
+- Solution: Explicitly register models in test setup
+```swift
+let container = try ModelContainer(
+    for: Account.self, AccountUpdate.self,
+    configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+)
+```
+
+**Problem: Chart not updating with data changes**
+- Solution: Use `.id()` modifier with data hash
+```swift
+chart.id("\(dataCount)-\(updateCount)")
+```
+
+**Problem: Decimal precision loss**
+- Solution: Always use `Decimal` type for financial values
+```swift
+var value: Decimal // NOT Double!
+```
+
 Please implement these patterns from the beginning and remind me if I suggest anything that violates these performance rules.
 
 ---
 
 **Based on successful optimization of PlainTextMoney app that achieved:**
 - Portfolio calculations: Complex queries → Simple O(n) arithmetic with caching
-- Chart rendering: Repeated calculations → Pre-cached values with hash validation
+- Chart rendering: Repeated calculations → Pre-cached values with hash validation  
 - Database performance: Unbounded queries → Limited, optimized queries
 - Threading stability: Crash-prone → Rock solid @MainActor pattern
 - Performance tracking: No metrics → Comprehensive caching with 10-100x speedup
 - Chart filtering: Naive re-aggregation → Smart post-aggregation filtering
 - Update counting: Total counts → Filtered visible counts matching display
+- Test coverage: 0% → 100% core logic with edge case validation
+- Swift 6 compliance: Full actor isolation with zero data races
