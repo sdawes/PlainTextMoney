@@ -26,9 +26,9 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             List {
-                // Portfolio Summary Section
+                // Portfolio Total Section - Fixed Value Only
                 Section("Portfolio Total") {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("£\(totalPortfolioValue.formatted())")
                                 .font(.largeTitle)
@@ -42,6 +42,20 @@ struct DashboardView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                    }
+                    .padding(.vertical, 8)
+                }
+                
+                // Portfolio Performance Section - Time-Based Metrics
+                Section("Portfolio Performance") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Time Period Picker
+                        Picker("Time Period", selection: $selectedPeriod) {
+                            ForEach(PerformanceCalculationService.TimePeriod.allCases) { period in
+                                Text(period.displayName).tag(period)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
                         
                         // Portfolio Performance Display
                         if portfolioPerformanceData.hasData {
@@ -74,20 +88,11 @@ struct DashboardView: View {
                                 }
                             }
                         }
-                        
-                        // Time Period Picker
-                        Picker("Time Period", selection: $selectedPeriod) {
-                            ForEach(PerformanceCalculationService.TimePeriod.allCases) { period in
-                                Text(period.displayName).tag(period)
-                            }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .padding(.top, 4)
                     }
                     .padding(.vertical, 8)
                 }
                 
-                // Portfolio Value Chart Section
+                // Portfolio Value Chart Section  
                 Section("Portfolio Chart") {
                     VStack(spacing: 12) {
                         if portfolioTimeline.isEmpty && isCalculating {
