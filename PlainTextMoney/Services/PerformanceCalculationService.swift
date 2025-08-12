@@ -65,6 +65,7 @@ struct PerformanceCalculationService {
     enum TimePeriod: String, CaseIterable, Identifiable {
         case lastUpdate = "lastUpdate"
         case oneMonth = "oneMonth"
+        case threeMonths = "threeMonths"
         case oneYear = "oneYear"
         case allTime = "allTime"
         
@@ -72,10 +73,11 @@ struct PerformanceCalculationService {
         
         var displayName: String {
             switch self {
-            case .lastUpdate: return "Last Update"
-            case .oneMonth: return "1 Month"
-            case .oneYear: return "1 Year"
-            case .allTime: return "All Time"
+            case .lastUpdate: return "Latest"
+            case .oneMonth: return "1M"
+            case .threeMonths: return "3M"
+            case .oneYear: return "1Y"
+            case .allTime: return "Max"
             }
         }
     }
@@ -175,6 +177,48 @@ struct PerformanceCalculationService {
     }
     
     /// Calculate account performance over the last year (~365 days)
+    /// Calculate account performance over the last 3 months (~90 days)
+    static func calculateAccountChangeThreeMonths(account: Account) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
+        let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+        
+        guard let currentUpdate = sortedUpdates.last else {
+            return (0.0, 0, true, false) // No updates at all
+        }
+        
+        let calendar = Calendar.current
+        let threeMonthsAgo = calendar.date(byAdding: .day, value: -90, to: Date()) ?? Date()
+        
+        // Find the most recent update that is >= 90 days old (baseline)
+        let eligibleUpdates = sortedUpdates.filter { $0.date <= threeMonthsAgo }
+        
+        let baselineUpdate: AccountUpdate
+        if let latestEligibleUpdate = eligibleUpdates.last {
+            // Found an update from 90+ days ago
+            baselineUpdate = latestEligibleUpdate
+        } else {
+            // No updates older than 90 days - use the first update (account is newer than 3 months)
+            guard let firstUpdate = sortedUpdates.first else {
+                return (0.0, 0, true, false)
+            }
+            baselineUpdate = firstUpdate
+        }
+        
+        // Calculate the change
+        let baselineValue = baselineUpdate.value
+        let currentValue = currentUpdate.value
+        let absoluteChange = currentValue - baselineValue
+        
+        // Handle zero baseline (avoid division by zero)
+        guard baselineValue != 0 else {
+            return (0.0, absoluteChange, absoluteChange >= 0, false) // hasData = false for zero baseline
+        }
+        
+        // Calculate percentage change
+        let percentageChange = Double(truncating: NSDecimalNumber(decimal: (absoluteChange / baselineValue) * 100))
+        
+        return (percentageChange, absoluteChange, absoluteChange >= 0, true)
+    }
+    
     static func calculateAccountChangeOneYear(account: Account) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
         let sortedUpdates = account.updates.sorted { $0.date < $1.date }
         

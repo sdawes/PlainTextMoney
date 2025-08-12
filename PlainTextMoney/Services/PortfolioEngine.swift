@@ -130,6 +130,8 @@ actor PortfolioEngine {
             return await calculatePortfolioChangeFromLastUpdate(accountIDs: activeAccountIDs)
         case .oneMonth:
             return await calculatePortfolioChangeOneMonth(accountIDs: activeAccountIDs)
+        case .threeMonths:
+            return await calculatePortfolioChangeThreeMonths(accountIDs: activeAccountIDs)
         case .oneYear:
             return await calculatePortfolioChangeOneYear(accountIDs: activeAccountIDs)
         case .allTime:
@@ -151,6 +153,8 @@ actor PortfolioEngine {
             return PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         case .oneMonth:
             return PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
+        case .threeMonths:
+            return PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         case .oneYear:
             return PerformanceCalculationService.calculateAccountChangeOneYear(account: account)
         case .allTime:
@@ -180,7 +184,7 @@ actor PortfolioEngine {
         let percentageChange = ((currentValue - previousValue) / previousValue) * 100
         
         return (
-            Double(truncating: percentageChange as NSNumber),
+            Double(truncating: NSDecimalNumber(decimal: percentageChange)),
             absoluteChange,
             absoluteChange >= 0,
             true,
@@ -198,6 +202,19 @@ actor PortfolioEngine {
             accountIDs: accountIDs,
             startDate: oneMonthAgo,
             periodLabel: "Past month"
+        )
+    }
+    
+    private func calculatePortfolioChangeThreeMonths(
+        accountIDs: [PersistentIdentifier]
+    ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
+        let calendar = Calendar.current
+        let threeMonthsAgo = calendar.date(byAdding: .day, value: -90, to: Date()) ?? Date()
+        
+        return await calculatePortfolioChangeForPeriod(
+            accountIDs: accountIDs,
+            startDate: threeMonthsAgo,
+            periodLabel: "Past 3 months"
         )
     }
     
@@ -232,7 +249,7 @@ actor PortfolioEngine {
         let periodLabel = "Since \(firstDate.formatted(.dateTime.day().month(.abbreviated).year()))"
         
         return (
-            Double(truncating: percentageChange as NSNumber),
+            Double(truncating: NSDecimalNumber(decimal: percentageChange)),
             absoluteChange,
             absoluteChange >= 0,
             true,
@@ -276,7 +293,7 @@ actor PortfolioEngine {
                     ((lastPoint.value - firstPoint.value) / firstPoint.value) * 100 : 0
                 
                 return (
-                    Double(truncating: percentageChange as NSNumber),
+                    Double(truncating: NSDecimalNumber(decimal: percentageChange)),
                     absoluteChange,
                     absoluteChange >= 0,
                     true,
@@ -298,7 +315,7 @@ actor PortfolioEngine {
         }
         
         return (
-            Double(truncating: percentageChange as NSNumber),
+            Double(truncating: NSDecimalNumber(decimal: percentageChange)),
             absoluteChange,
             absoluteChange >= 0,
             true,

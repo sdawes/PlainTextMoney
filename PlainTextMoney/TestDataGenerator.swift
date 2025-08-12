@@ -422,10 +422,59 @@ class TestDataGenerator {
                     if updateDate >= accountStartDate && index < values.count && values[index] > 0 {
                         let update = AccountUpdate(value: values[index], account: account)
                         
-                        // Set realistic time of day (business hours)
-                        let hour = 9 + (index * 2) % 10  // Spread between 9 AM - 6 PM
-                        let minute = (index * 15) % 60   // Various minutes
-                        update.date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: updateDate) ?? updateDate
+                        // Set varied realistic time patterns
+                        var hour: Int
+                        var minute: Int
+                        var dayOffset = 0
+                        
+                        // Create more realistic variation in update timing
+                        switch index {
+                        case 0: // Pension - usually updated on same day, morning
+                            hour = Int.random(in: 8...10)
+                            minute = Int.random(in: 0...59)
+                        case 1: // T212 ISA - often updated same day but different time
+                            hour = Int.random(in: 10...14)
+                            minute = Int.random(in: 0...59)
+                            // Sometimes updated a day or two later
+                            if Int.random(in: 1...4) == 1 {
+                                dayOffset = Int.random(in: 1...3)
+                            }
+                        case 2: // HL Active Savings - banking hours
+                            hour = Int.random(in: 9...16)
+                            minute = Int.random(in: 0...59)
+                            // Sometimes a few days later
+                            if Int.random(in: 1...3) == 1 {
+                                dayOffset = Int.random(in: 1...2)
+                            }
+                        case 3: // Flagstone - often updated later in the week
+                            hour = Int.random(in: 11...17)
+                            minute = Int.random(in: 0...59)
+                            // Frequently updated several days later
+                            if Int.random(in: 1...2) == 1 {
+                                dayOffset = Int.random(in: 2...7)
+                            }
+                        case 4: // HL Fund & Share - business hours
+                            hour = Int.random(in: 9...15)
+                            minute = Int.random(in: 0...59)
+                            // Sometimes updated same day, sometimes later
+                            if Int.random(in: 1...3) == 1 {
+                                dayOffset = Int.random(in: 1...4)
+                            }
+                        case 5: // Crypto - can be updated any time
+                            hour = Int.random(in: 6...23)
+                            minute = Int.random(in: 0...59)
+                            // Very varied timing - sometimes much later
+                            if Int.random(in: 1...3) == 1 {
+                                dayOffset = Int.random(in: 1...10)
+                            }
+                        default:
+                            hour = Int.random(in: 9...17)
+                            minute = Int.random(in: 0...59)
+                        }
+                        
+                        // Apply day offset and set time
+                        let adjustedDate = calendar.date(byAdding: .day, value: dayOffset, to: updateDate) ?? updateDate
+                        update.date = calendar.date(bySettingHour: hour, minute: minute, second: Int.random(in: 0...59), of: adjustedDate) ?? adjustedDate
                         
                         modelContext.insert(update)
                     }

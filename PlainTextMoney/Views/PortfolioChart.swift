@@ -19,7 +19,7 @@ struct TimePeriodContext {
         switch period {
         case .lastUpdate, .allTime:
             return true  // Show contextual labels
-        case .oneMonth, .oneYear:
+        case .oneMonth, .threeMonths, .oneYear:
             return false // Hide labels - period is obvious from selector
         }
     }
@@ -47,7 +47,7 @@ struct TimePeriodContext {
             } else {
                 return "\(startFormatted) - \(endFormatted)"
             }
-        case .oneMonth, .oneYear:
+        case .oneMonth, .threeMonths, .oneYear:
             return nil
         }
     }

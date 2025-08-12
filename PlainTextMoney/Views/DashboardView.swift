@@ -57,7 +57,7 @@ struct DashboardView: View {
                                         .scaleEffect(0.7)
                                 } else {
                                     HStack(spacing: 4) {
-                                        Text("\(portfolioPerformanceData.isPositive ? "" : "-")\(abs(portfolioPerformanceData.percentage), specifier: "%.1f")%")
+                                        Text("\(portfolioPerformanceData.isPositive ? "" : "-")\(abs(portfolioPerformanceData.percentage), specifier: "%.2f")%")
                                             .font(.subheadline)
                                             .fontWeight(.semibold)
                                             .foregroundColor(portfolioPerformanceData.isPositive ? .green : .red)
@@ -141,7 +141,7 @@ struct DashboardView: View {
                                 
                                 if performanceData.hasData {
                                     HStack(spacing: 4) {
-                                        Text("\(performanceData.isPositive ? "" : "-")\(abs(performanceData.percentage), specifier: "%.1f")%")
+                                        Text("\(performanceData.isPositive ? "" : "-")\(abs(performanceData.percentage), specifier: "%.2f")%")
                                             .font(.caption)
                                             .fontWeight(.medium)
                                             .foregroundColor(performanceData.isPositive ? .green : .red)
@@ -293,6 +293,8 @@ struct DashboardView: View {
             return PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         case .oneMonth:
             return PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
+        case .threeMonths:
+            return PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         case .oneYear:
             return PerformanceCalculationService.calculateAccountChangeOneYear(account: account)
         case .allTime:
@@ -310,6 +312,8 @@ struct DashboardView: View {
             return nil // Let engine handle this case
         case .oneMonth:
             return calendar.date(byAdding: .day, value: -30, to: Date())
+        case .threeMonths:
+            return calendar.date(byAdding: .day, value: -90, to: Date())
         case .oneYear:
             return calendar.date(byAdding: .day, value: -365, to: Date())
         case .allTime:
@@ -325,6 +329,9 @@ struct DashboardView: View {
             
         case .oneMonth:
             return "Past month"
+            
+        case .threeMonths:
+            return "Past 3 months"
             
         case .oneYear:
             return "Past year"

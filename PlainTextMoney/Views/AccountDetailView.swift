@@ -24,10 +24,12 @@ struct AccountDetailView: View {
             return "Recent Updates"
         case .oneMonth:
             return "Past Month"
+        case .threeMonths:
+            return "Past 3 Months"
         case .oneYear:
             return "Past Year"
         case .allTime:
-            return "All Time"
+            return "Max"
         }
     }
     
@@ -44,6 +46,8 @@ struct AccountDetailView: View {
             return nil
         case .oneMonth:
             return calendar.date(byAdding: .day, value: -30, to: Date())
+        case .threeMonths:
+            return calendar.date(byAdding: .day, value: -90, to: Date())
         case .oneYear:
             return calendar.date(byAdding: .day, value: -365, to: Date())
         case .allTime:
