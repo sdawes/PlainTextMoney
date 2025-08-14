@@ -48,7 +48,7 @@ class TestDataGenerator {
     // MARK: - Test Data Sets
     
     enum TestDataSet {
-        case set1  // Personal finance data (8 accounts, 5 dates)
+        case set1  // Personal finance data (8 accounts, 8 dates)
         case set2  // Performance test data (8 accounts, 5 years, ~4000 updates)
         case set3  // Simple monthly pattern (2 accounts, £100/month for 6 months)
     }
@@ -95,7 +95,7 @@ class TestDataGenerator {
             ("HL Active Savings", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL S&S ISA", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
             ("HL GSIPP", calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date()),
-            ("T212 Invest", calendar.date(from: DateComponents(year: 2025, month: 8, day: 1)) ?? Date())
+            ("T212 Invest", calendar.date(from: DateComponents(year: 2025, month: 8, day: 14)) ?? Date())
         ]
         
         for (name, createdAt) in accountData {
@@ -169,10 +169,20 @@ class TestDataGenerator {
                 1: 38194,  // Monzo Savings
                 2: 21990,  // T212 Cash ISA
                 3: 20612,  // T212 S&S ISA
-                4: 45107,  // HL Active Savings
+                4: 45069,  // HL Active Savings
                 5: 12520,  // HL S&S ISA
-                6: 77570,  // HL GSIPP
-                7: 100     // T212 Invest
+                6: 77570   // HL GSIPP
+            ],
+            // 14/08/2025
+            calendar.date(from: DateComponents(year: 2025, month: 8, day: 14)) ?? Date(): [
+                0: 18669,  // Monzo Cash ISA (unchanged)
+                1: 37000,  // Monzo Savings
+                2: 22021,  // T212 Cash ISA
+                3: 20629,  // T212 S&S ISA
+                4: 45069,  // HL Active Savings (unchanged)
+                5: 12520,  // HL S&S ISA (unchanged)
+                6: 77393,  // HL GSIPP
+                7: 1102    // T212 Invest (first appearance)
             ]
         ]
         
@@ -197,10 +207,10 @@ class TestDataGenerator {
                         
                         if isInitialUpdate {
                             if isT212Invest {
-                                // T212 Invest gets its own time on its creation date (08/01/2025)
+                                // T212 Invest gets its own time on its creation date (14/08/2025)
                                 update.date = date.addingTimeInterval(10 * 3600 + 30 * 60) // 10:30 AM
                             } else {
-                                // Initial updates for accounts created on 05/01/2025 are staggered
+                                // Initial updates for accounts created on 01/05/2025 are staggered
                                 let minutesOffset = TimeInterval(accountIndex * 2 * 60) // Stagger by 2 minutes each
                                 update.date = date.addingTimeInterval(9 * 3600 + minutesOffset) // Start at 09:00 AM
                             }
@@ -251,7 +261,6 @@ class TestDataGenerator {
     
     private static func generateSet2Updates(for accounts: [Account], modelContext: ModelContext) {
         let calendar = Calendar.current
-        let baseDate = Date()
         
         // Hard-coded realistic financial data over 5 years
         // 6 accounts: Aviva Pension, T212 ISA, HL Active Savings, Flagstone, HL Fund & Share, Crypto
