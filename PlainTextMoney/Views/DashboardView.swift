@@ -13,7 +13,7 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     @State private var showingAddAccount = false
-    @State private var selectedPeriod: PerformanceCalculationService.TimePeriod = .lastUpdate
+    @State private var selectedPeriod: PerformanceCalculationService.TimePeriod = .todaysChanges
     
     // Portfolio Engine for background calculations
     @State private var portfolioEngine: PortfolioEngine?
@@ -294,7 +294,7 @@ struct DashboardView: View {
     
     private func calculateAccountPerformance(account: Account, period: PerformanceCalculationService.TimePeriod) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
         switch period {
-        case .lastUpdate:
+        case .todaysChanges:
             return PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         case .oneMonth:
             return PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
@@ -311,9 +311,9 @@ struct DashboardView: View {
         let calendar = Calendar.current
         
         switch selectedPeriod {
-        case .lastUpdate:
-            // For last update, we'll calculate this in the engine
-            // The engine will determine the second-to-last portfolio point
+        case .todaysChanges:
+            // For today's changes, we'll calculate this in the engine
+            // The engine will determine changes made today
             return nil // Let engine handle this case
         case .oneMonth:
             return calendar.date(byAdding: .day, value: -30, to: Date())
@@ -328,9 +328,9 @@ struct DashboardView: View {
     
     private func contextLabel(for account: Account, period: PerformanceCalculationService.TimePeriod) -> String {
         switch period {
-        case .lastUpdate:
+        case .todaysChanges:
             let date = lastUpdatedDate(for: account)
-            return "Since last update (\(date.formatted(date: .abbreviated, time: .omitted)))"
+            return "Today's changes"
             
         case .oneMonth:
             return "Past month"

@@ -143,7 +143,7 @@ struct PortfolioEngineTests {
         let timeline = await engine.generateFilteredPortfolioTimeline(
             accountIDs: accountIDs,
             startDate: nil,
-            period: .lastUpdate
+            period: .todaysChanges
         )
         
         // Then: Should return exactly 2 points for "Since Last Update"
@@ -199,7 +199,7 @@ struct PortfolioEngineTests {
         // When: Calculate performance for last update
         let performance = await engine.calculatePortfolioPerformance(
             accountIDs: accountIDs,
-            period: .lastUpdate
+            period: .todaysChanges
         )
         
         // Then: Should have valid performance data
@@ -263,7 +263,7 @@ struct PortfolioEngineTests {
             return
         }
         
-        TestHelpers.expectDecimalEqual(finalValue, expectedTotal, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(finalValue, expectedTotal, accuracy: Decimal(0.01))
     }
     
     // MARK: - Error Handling Tests
@@ -309,19 +309,19 @@ struct PortfolioEngineTests {
         // When: Calculate performance multiple times
         let performance1 = await engine.calculatePortfolioPerformance(
             accountIDs: accountIDs,
-            period: .lastUpdate
+            period: .todaysChanges
         )
         
         let performance2 = await engine.calculatePortfolioPerformance(
             accountIDs: accountIDs,
-            period: .lastUpdate
+            period: .todaysChanges
         )
         
         // Then: Results should be identical
         #expect(performance1.hasData == performance2.hasData)
         #expect(performance1.isPositive == performance2.isPositive)
         TestHelpers.expectPercentageEqual(performance1.percentage, performance2.percentage, accuracy: 0.01)
-        TestHelpers.expectDecimalEqual(performance1.absolute, performance2.absolute, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(performance1.absolute, performance2.absolute, accuracy: Decimal(0.01))
         #expect(performance1.actualPeriodLabel == performance2.actualPeriodLabel)
     }
 }

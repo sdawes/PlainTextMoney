@@ -17,7 +17,7 @@ struct TimePeriodContext {
     
     var shouldShowXAxis: Bool {
         switch period {
-        case .lastUpdate, .allTime:
+        case .todaysChanges, .allTime:
             return true  // Show contextual labels
         case .oneMonth, .threeMonths, .oneYear:
             return false // Hide labels - period is obvious from selector
@@ -28,8 +28,8 @@ struct TimePeriodContext {
         guard shouldShowXAxis else { return nil }
         
         switch period {
-        case .lastUpdate:
-            // Show the date of the last update
+        case .todaysChanges:
+            // Show today's date for today's changes
             if let lastDate = dataPoints.last?.date {
                 return lastDate.formatted(.dateTime.day().month(.abbreviated).year())
             }

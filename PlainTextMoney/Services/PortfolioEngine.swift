@@ -81,24 +81,21 @@ actor PortfolioEngine {
     ) async -> [ChartDataPoint] {
         let fullTimeline = await generatePortfolioTimeline(accountIDs: accountIDs)
         
-        // Handle special case for lastUpdate
-        if period == .lastUpdate && startDate == nil {
-            // For "Since Last Update", we need exactly the last 2 points
-            if fullTimeline.count >= 2 {
-                let lastTwoPoints = Array(fullTimeline.suffix(2))
-                
-                // DEBUG: Log the actual data points for debugging
-                print("🔍 DEBUG: Since Last Update - Full timeline has \(fullTimeline.count) points")
-                print("🔍 DEBUG: Last 2 points:")
-                for (index, point) in lastTwoPoints.enumerated() {
-                    print("   Point \(index + 1): Date=\(point.date), Value=£\(point.value)")
-                }
-                print("🔍 DEBUG: Values identical? \(lastTwoPoints[0].value == lastTwoPoints[1].value)")
-                print("🔍 DEBUG: Dates identical? \(lastTwoPoints[0].date == lastTwoPoints[1].date)")
-                
-                return lastTwoPoints
+        // Handle special case for todaysChanges
+        if period == .todaysChanges && startDate == nil {
+            // For "Today's Changes", filter to today's updates only
+            let calendar = Calendar.current
+            let startOfToday = calendar.startOfDay(for: Date())
+            
+            // Get timeline points from start of today onwards
+            let todaysTimeline = fullTimeline.filter { $0.date >= startOfToday }
+            
+            // If no updates today, show the last point for reference
+            if todaysTimeline.isEmpty && !fullTimeline.isEmpty {
+                return [fullTimeline.last!]
             }
-            return fullTimeline
+            
+            return todaysTimeline
         }
         
         guard let startDate = startDate else {
@@ -126,8 +123,8 @@ actor PortfolioEngine {
         let activeAccountIDs = activeAccounts.map { $0.persistentModelID }
         
         switch period {
-        case .lastUpdate:
-            return await calculatePortfolioChangeFromLastUpdate(accountIDs: activeAccountIDs)
+        case .todaysChanges:
+            return await calculatePortfolioChangesToday(accountIDs: activeAccountIDs)
         case .oneMonth:
             return await calculatePortfolioChangeOneMonth(accountIDs: activeAccountIDs)
         case .threeMonths:
@@ -149,7 +146,7 @@ actor PortfolioEngine {
         period: PerformanceCalculationService.TimePeriod
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
         switch period {
-        case .lastUpdate:
+        case .todaysChanges:
             return PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         case .oneMonth:
             return PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
@@ -164,32 +161,58 @@ actor PortfolioEngine {
     
     // MARK: - Private Calculation Methods
     
-    private func calculatePortfolioChangeFromLastUpdate(
+    private func calculatePortfolioChangesToday(
         accountIDs: [PersistentIdentifier]
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
-        let timeline = await generatePortfolioTimeline(accountIDs: accountIDs)
+        let accounts = fetchAccounts(withIDs: accountIDs)
+        let activeAccounts = accounts.filter { $0.isActive }
         
-        guard timeline.count >= 2 else {
-            return (0, 0, true, false, "No previous update")
+        guard !activeAccounts.isEmpty else { 
+            return (0.0, 0, true, false, "") 
         }
         
-        let previousValue = timeline[timeline.count - 2].value
-        let currentValue = timeline.last?.value ?? 0
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
         
-        guard previousValue > 0 else {
-            return (0, 0, true, false, "No previous value")
+        // Calculate current portfolio total
+        let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
+            return total + (latestUpdate?.value ?? 0)
         }
         
-        let absoluteChange = currentValue - previousValue
-        let percentageChange = ((currentValue - previousValue) / previousValue) * 100
+        // Calculate portfolio total at start of today
+        let startOfTodayTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let updatesBeforeToday = account.updates
+                .filter { $0.date < startOfToday }
+                .sorted { $0.date < $1.date }
+            
+            if let lastUpdateBeforeToday = updatesBeforeToday.last {
+                return total + lastUpdateBeforeToday.value
+            } else {
+                return total
+            }
+        }
         
-        return (
-            Double(truncating: NSDecimalNumber(decimal: percentageChange)),
-            absoluteChange,
-            absoluteChange >= 0,
-            true,
-            "Since last update"
-        )
+        let absoluteChange = currentTotal - startOfTodayTotal
+        let isPositive = absoluteChange >= 0
+        
+        let percentage: Double
+        if startOfTodayTotal > 0 {
+            let change = (absoluteChange / startOfTodayTotal) * 100
+            percentage = Double(truncating: change as NSNumber)
+        } else if absoluteChange > 0 {
+            return (100.0, absoluteChange, true, true, "Today's changes")
+        } else {
+            percentage = 0.0
+        }
+        
+        let updatedTodayCount = activeAccounts.filter { account in
+            account.updates.contains { $0.date >= startOfToday }
+        }.count
+        
+        let label = updatedTodayCount > 0 ? "Today's changes (\(updatedTodayCount) account\(updatedTodayCount == 1 ? "" : "s"))" : "Today's changes"
+        
+        return (percentage, absoluteChange, isPositive, true, label)
     }
     
     private func calculatePortfolioChangeOneMonth(

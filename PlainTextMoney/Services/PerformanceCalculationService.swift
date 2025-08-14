@@ -63,7 +63,7 @@ struct PerformanceCalculationService {
     }
     
     enum TimePeriod: String, CaseIterable, Identifiable {
-        case lastUpdate = "lastUpdate"
+        case todaysChanges = "todaysChanges"
         case oneMonth = "oneMonth"
         case threeMonths = "threeMonths"
         case oneYear = "oneYear"
@@ -73,7 +73,7 @@ struct PerformanceCalculationService {
         
         var displayName: String {
             switch self {
-            case .lastUpdate: return "Latest"
+            case .todaysChanges: return "Today"
             case .oneMonth: return "1M"
             case .threeMonths: return "3M"
             case .oneYear: return "1Y"
@@ -263,50 +263,61 @@ struct PerformanceCalculationService {
     
     // MARK: - Portfolio Performance Calculations
     
-    /// Calculate portfolio performance since the last update across all accounts
-    static func calculatePortfolioChangeFromLastUpdate(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
-        return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .lastUpdate) {
+    /// Calculate portfolio performance for today's changes
+    static func calculatePortfolioChangesToday(accounts: [Account]) -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
+        return PortfolioPerformanceCache.getOrCalculate(accounts: accounts, period: .todaysChanges) {
             let activeAccounts = accounts.filter { $0.isActive }
             guard !activeAccounts.isEmpty else { return (0.0, 0, true, false, "") }
             
-            // Get all updates across all accounts, sorted chronologically
-            let allUpdates = activeAccounts.flatMap { $0.updates }
-                .sorted { $0.date < $1.date }
+            let calendar = Calendar.current
+            let startOfToday = calendar.startOfDay(for: Date())
             
-            guard allUpdates.count >= 2 else { return (0.0, 0, true, false, "Need more updates") }
+            // Calculate current portfolio total
+            let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+                let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
+                return total + (latestUpdate?.value ?? 0)
+            }
             
-            // Find the most recent update
-            let latestUpdate = allUpdates.last!
-            
-            // Calculate portfolio value at that point and at the previous significant point
-            var accountValues: [String: Decimal] = [:]
-            var previousPortfolioValue: Decimal = 0
-            var currentPortfolioValue: Decimal = 0
-            
-            // Replay updates to find portfolio values
-            for update in allUpdates {
-                accountValues[update.account?.name ?? ""] = update.value
-                let portfolioTotal = accountValues.values.reduce(0, +)
+            // Calculate portfolio total at start of today
+            let startOfTodayTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+                // Find the most recent update before today
+                let updatesBeforeToday = account.updates
+                    .filter { $0.date < startOfToday }
+                    .sorted { $0.date < $1.date }
                 
-                if update == latestUpdate {
-                    currentPortfolioValue = portfolioTotal
-                } else if update == allUpdates[allUpdates.count - 2] {
-                    previousPortfolioValue = portfolioTotal
+                if let lastUpdateBeforeToday = updatesBeforeToday.last {
+                    return total + lastUpdateBeforeToday.value
+                } else {
+                    // Account created today or has no updates before today
+                    // Don't include in baseline (will show as new addition)
+                    return total
                 }
             }
             
-            let absoluteChange = currentPortfolioValue - previousPortfolioValue
+            // Calculate today's change
+            let absoluteChange = currentTotal - startOfTodayTotal
             let isPositive = absoluteChange >= 0
             
+            // Calculate percentage change
             let percentage: Double
-            if previousPortfolioValue > 0 {
-                let change = (absoluteChange / previousPortfolioValue) * 100
+            if startOfTodayTotal > 0 {
+                let change = (absoluteChange / startOfTodayTotal) * 100
                 percentage = Double(truncating: change as NSNumber)
+            } else if absoluteChange > 0 {
+                // Special case: portfolio started from zero today (new accounts created)
+                return (100.0, absoluteChange, true, true, "Today's changes")
             } else {
                 percentage = 0.0
             }
             
-            return (percentage, absoluteChange, isPositive, true, "Since last update")
+            // Count how many accounts were updated today for context
+            let updatedTodayCount = activeAccounts.filter { account in
+                account.updates.contains { $0.date >= startOfToday }
+            }.count
+            
+            let label = updatedTodayCount > 0 ? "Today's changes (\(updatedTodayCount) account\(updatedTodayCount == 1 ? "" : "s"))" : "Today's changes"
+            
+            return (percentage, absoluteChange, isPositive, true, label)
         }
     }
     

@@ -274,7 +274,7 @@ struct UIIntegrationTests {
         
         
         // When: Calculate performance using actual service
-        let performance = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: accounts)
+        let performance = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: accounts)
         
         // Then: Should provide valid performance data
         #expect(performance.hasData, "Complex portfolio should have performance data")
@@ -750,7 +750,7 @@ struct UIIntegrationTests {
         
         // Portfolio should show positive growth from the user journey
         // Actual calculation may vary due to timeline-based calculation method
-        TestHelpers.expectDecimalEqual(portfolioPerformance.absolute, 1000, accuracy: 300.0)
+        TestHelpers.expectDecimalEqual(portfolioPerformance.absolute, 1000, accuracy: Decimal(300.0))
         #expect(portfolioPerformance.percentage > 4.0)
         #expect(portfolioPerformance.percentage < 8.0)
     }

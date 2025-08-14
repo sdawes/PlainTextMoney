@@ -1,5 +1,11 @@
 # 📱 Plain Text Wealth - iOS Financial Tracker
 
+## 🚨 IMPORTANT: Also Read General Guidelines
+**First Load:** Also consult `~/Documents/AI_Guidelines/info1_AI_Agent_Guidelines.md` for general AI behavior rules.
+**Technical Patterns:** See `~/Documents/AI_Guidelines/info2_Swift_Best_Practices.md` for Swift/SwiftData/SwiftUI patterns.
+
+---
+
 ## Project Philosophy: Native-First Architecture
 This app is built using **100% native iOS technologies and patterns** - no external dependencies, no custom frameworks, just pure SwiftUI, SwiftData, and native iOS design patterns. The goal is maximum reliability, performance, and consistency with iOS ecosystem standards.
 
