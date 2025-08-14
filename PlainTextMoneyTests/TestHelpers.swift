@@ -5,14 +5,14 @@
 //  Created by Claude on 10/08/2025.
 //
 
-import XCTest
+import Testing
 import SwiftData
 import Foundation
 @testable import PlainTextMoney
 
 /// Helper utilities for testing SwiftData models and services
 @MainActor
-class TestHelpers {
+struct TestHelpers {
     
     // MARK: - In-Memory Container Setup
     
@@ -145,39 +145,33 @@ class TestHelpers {
     
     // MARK: - Assertion Helpers
     
-    /// Asserts that two Decimal values are approximately equal (for financial calculations)
-    static func assertDecimalEqual(
+    /// Expects that two Decimal values are approximately equal (for financial calculations)
+    static func expectDecimalEqual(
         _ actual: Decimal,
         _ expected: Decimal,
         accuracy: Decimal = 0.01,
-        file: StaticString = #file,
-        line: UInt = #line
+        sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let difference = abs(actual - expected)
-        XCTAssertLessThanOrEqual(
-            difference,
-            accuracy,
-            "Expected \\(expected), but got \\(actual). Difference: \\(difference)",
-            file: file,
-            line: line
+        #expect(
+            difference <= accuracy,
+            "Expected \(expected), but got \(actual). Difference: \(difference)",
+            sourceLocation: sourceLocation
         )
     }
     
-    /// Asserts that a percentage is approximately correct
-    static func assertPercentageEqual(
+    /// Expects that a percentage is approximately correct
+    static func expectPercentageEqual(
         _ actual: Double,
         _ expected: Double,
         accuracy: Double = 0.1,
-        file: StaticString = #file,
-        line: UInt = #line
+        sourceLocation: SourceLocation = #_sourceLocation
     ) {
-        XCTAssertEqual(
-            actual,
-            expected,
-            accuracy: accuracy,
-            "Expected \\(expected)%, but got \\(actual)%",
-            file: file,
-            line: line
+        let difference = abs(actual - expected)
+        #expect(
+            difference <= accuracy,
+            "Expected \(expected)%, but got \(actual)%",
+            sourceLocation: sourceLocation
         )
     }
     
@@ -205,20 +199,12 @@ class TestHelpers {
 
 // MARK: - Test Extensions
 
-extension XCTestCase {
-    /// Convenience method to create a test context
-    @MainActor
-    func createTestContext() throws -> ModelContext {
-        try TestHelpers.createTestContext()
-    }
-    
-    /// Convenience method to save and catch errors
-    @MainActor
-    func saveContext(_ context: ModelContext, file: StaticString = #file, line: UInt = #line) {
-        do {
-            try context.save()
-        } catch {
-            XCTFail("Failed to save context: \\(error)", file: file, line: line)
-        }
+/// Convenience method to save and catch errors for Swift Testing
+@MainActor
+func saveContext(_ context: ModelContext, sourceLocation: SourceLocation = #_sourceLocation) {
+    do {
+        try context.save()
+    } catch {
+        Issue.record("Failed to save context: \(error)", sourceLocation: sourceLocation)
     }
 }

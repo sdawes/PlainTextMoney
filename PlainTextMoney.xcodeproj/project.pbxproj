@@ -18,6 +18,7 @@
 
 /* Begin PBXFileReference section */
 		1F702AAD2E39315700C9E564 /* PlainTextMoney.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PlainTextMoney.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1F7117842E4E06720057C0BE /* PlainTextMoney.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = PlainTextMoney.xctestplan; sourceTree = "<group>"; };
 		1FFB57882E48C1C200C5A351 /* PlainTextMoneyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PlainTextMoneyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -55,6 +56,7 @@
 		1F702AA42E39315700C9E564 = {
 			isa = PBXGroup;
 			children = (
+				1F7117842E4E06720057C0BE /* PlainTextMoney.xctestplan */,
 				1F702AAF2E39315700C9E564 /* PlainTextMoney */,
 				1FFB57892E48C1C200C5A351 /* PlainTextMoneyTests */,
 				1F702AAE2E39315700C9E564 /* Products */,

@@ -5,18 +5,18 @@
 //  Created by Claude on 10/08/2025.
 //
 
-import XCTest
+import Testing
 import Foundation
 @testable import PlainTextMoney
 
 /// Tests for InputValidator
 /// Ensures monetary input validation works correctly and prevents invalid data entry
 @MainActor
-final class InputValidatorTests: XCTestCase {
+struct InputValidatorTests {
     
     // MARK: - Valid Input Tests
     
-    func testValidateMonetaryInput_WithValidWholeNumbers() {
+    @Test func validateMonetaryInput_WithValidWholeNumbers() {
         // Given: Valid whole number strings
         let validInputs = ["100", "1000", "50"]
         
@@ -27,14 +27,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be valid
             switch result {
             case .valid(let decimal):
-                XCTAssertEqual(decimal, Decimal(string: input))
+                #expect(decimal == Decimal(string: input))
             case .invalid(let error):
-                XCTFail("Input '\(input)' should be valid but got error: \(error)")
+                Issue.record("Input '\(input)' should be valid but got error: \(error)")
             }
         }
     }
     
-    func testValidateMonetaryInput_WithValidDecimalNumbers() {
+    @Test func validateMonetaryInput_WithValidDecimalNumbers() {
         // Given: Valid decimal strings
         let validInputs = ["100.50", "1000.99", "50.00", "0.01", "123.45"]
         
@@ -45,14 +45,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be valid
             switch result {
             case .valid(let decimal):
-                XCTAssertEqual(decimal, Decimal(string: input))
+                #expect(decimal == Decimal(string: input))
             case .invalid(let error):
-                XCTFail("Input '\(input)' should be valid but got error: \(error)")
+                Issue.record("Input '\(input)' should be valid but got error: \(error)")
             }
         }
     }
     
-    func testValidateMonetaryInput_WithZero() {
+    @Test func validateMonetaryInput_WithZero() {
         // Given: Zero value
         let input = "0"
         
@@ -62,13 +62,13 @@ final class InputValidatorTests: XCTestCase {
         // Then: Should be valid
         switch result {
         case .valid(let decimal):
-            XCTAssertEqual(decimal, 0)
+            #expect(decimal == 0)
         case .invalid(let error):
-            XCTFail("Zero should be valid but got error: \(error)")
+            Issue.record("Zero should be valid but got error: \(error)")
         }
     }
     
-    func testValidateMonetaryInput_WithLeadingZeros() {
+    @Test func validateMonetaryInput_WithLeadingZeros() {
         // Given: Numbers with leading zeros
         let testCases: [(input: String, expected: Decimal)] = [
             ("01", 1),
@@ -83,16 +83,16 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be valid and correctly parsed
             switch result {
             case .valid(let decimal):
-                TestHelpers.assertDecimalEqual(decimal, testCase.expected)
+                TestHelpers.expectDecimalEqual(decimal, testCase.expected)
             case .invalid(let error):
-                XCTFail("Input '\(testCase.input)' should be valid but got error: \(error)")
+                Issue.record("Input '\(testCase.input)' should be valid but got error: \(error)")
             }
         }
     }
     
     // MARK: - Invalid Input Tests
     
-    func testValidateMonetaryInput_WithEmptyString() {
+    @Test func validateMonetaryInput_WithEmptyString() {
         // Given: Empty string
         let input = ""
         
@@ -102,13 +102,13 @@ final class InputValidatorTests: XCTestCase {
         // Then: Should be invalid
         switch result {
         case .valid(_):
-            XCTFail("Empty string should be invalid")
+            Issue.record("Empty string should be invalid")
         case .invalid(let error):
-            XCTAssertTrue(error.contains("cannot be empty"))
+            #expect(error.contains("cannot be empty"))
         }
     }
     
-    func testValidateMonetaryInput_WithInvalidCharacters() {
+    @Test func validateMonetaryInput_WithInvalidCharacters() {
         // Given: Strings with invalid characters
         let invalidInputs = ["abc", "100a", "1.2.3", "100,50", "$100", "100%", "100-", "100+"]
         
@@ -119,14 +119,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be invalid
             switch result {
             case .valid(_):
-                XCTFail("Input '\(input)' should be invalid")
+                Issue.record("Input '\(input)' should be invalid")
             case .invalid(let error):
-                XCTAssertFalse(error.isEmpty, "Invalid input should have error message")
+                #expect(!error.isEmpty, "Invalid input should have error message")
             }
         }
     }
     
-    func testValidateMonetaryInput_WithExcessiveDecimalPlaces() {
+    @Test func validateMonetaryInput_WithExcessiveDecimalPlaces() {
         // Given: Numbers with more than 2 decimal places
         let invalidInputs = ["100.123", "50.9999", "1.2345"]
         
@@ -137,14 +137,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be invalid for financial precision
             switch result {
             case .valid(_):
-                XCTFail("Input '\(input)' with >2 decimal places should be invalid")
+                Issue.record("Input '\(input)' with >2 decimal places should be invalid")
             case .invalid(let error):
-                XCTAssertTrue(error.contains("decimal"), "Error should mention decimal places")
+                #expect(error.contains("decimal"), "Error should mention decimal places")
             }
         }
     }
     
-    func testValidateMonetaryInput_WithNegativeNumbers() {
+    @Test func validateMonetaryInput_WithNegativeNumbers() {
         // Given: Negative numbers (invalid format for this validator)
         let invalidInputs = ["-100", "-50.25", "-0.01"]
         
@@ -155,16 +155,16 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be invalid (format doesn't allow negative sign)
             switch result {
             case .valid(_):
-                XCTFail("Negative number '\(input)' should be invalid")
+                Issue.record("Negative number '\(input)' should be invalid")
             case .invalid(let error):
-                XCTAssertFalse(error.isEmpty, "Should have error message")
+                #expect(!error.isEmpty, "Should have error message")
             }
         }
     }
     
     // MARK: - Edge Cases
     
-    func testValidateMonetaryInput_WithVeryLargeNumbers() {
+    @Test func validateMonetaryInput_WithVeryLargeNumbers() {
         // Given: Numbers exceeding the maximum value
         let largeInputs = ["1000000000", "999999999999"]
         
@@ -175,14 +175,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should be invalid due to size limits
             switch result {
             case .valid(_):
-                XCTFail("Large number '\(input)' should be invalid")
+                Issue.record("Large number '\(input)' should be invalid")
             case .invalid(let error):
-                XCTAssertTrue(error.contains("too large") || error.contains("too long"), "Should mention size limit")
+                #expect(error.contains("too large") || error.contains("too long"), "Should mention size limit")
             }
         }
     }
     
-    func testValidateMonetaryInput_WithMaximumValidValue() {
+    @Test func validateMonetaryInput_WithMaximumValidValue() {
         // Given: Maximum allowed value
         let maxInput = "999999999.99"
         
@@ -192,13 +192,13 @@ final class InputValidatorTests: XCTestCase {
         // Then: Should be valid
         switch result {
         case .valid(let decimal):
-            TestHelpers.assertDecimalEqual(decimal, InputValidator.maxValue)
+            TestHelpers.expectDecimalEqual(decimal, InputValidator.maxValue)
         case .invalid(let error):
-            XCTFail("Maximum value should be valid but got error: \(error)")
+            Issue.record("Maximum value should be valid but got error: \(error)")
         }
     }
     
-    func testValidateMonetaryInput_WithWhitespace() {
+    @Test func validateMonetaryInput_WithWhitespace() {
         // Given: Input with whitespace (should be trimmed)
         let testCases: [(input: String, expectedValue: Decimal)] = [
             (" 100", 100),
@@ -214,14 +214,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should trim whitespace and accept
             switch result {
             case .valid(let decimal):
-                TestHelpers.assertDecimalEqual(decimal, testCase.expectedValue)
+                TestHelpers.expectDecimalEqual(decimal, testCase.expectedValue)
             case .invalid(let error):
-                XCTFail("Whitespace input should be trimmed and accepted, got error: \(error)")
+                Issue.record("Whitespace input should be trimmed and accepted, got error: \(error)")
             }
         }
     }
     
-    func testValidateMonetaryInput_WithTooLongInput() {
+    @Test func validateMonetaryInput_WithTooLongInput() {
         // Given: Input exceeding character limit
         let longInput = String(repeating: "1", count: InputValidator.maxCharacterCount + 1)
         
@@ -231,15 +231,15 @@ final class InputValidatorTests: XCTestCase {
         // Then: Should be invalid
         switch result {
         case .valid(_):
-            XCTFail("Too long input should be invalid")
+            Issue.record("Too long input should be invalid")
         case .invalid(let error):
-            XCTAssertTrue(error.contains("too long"), "Should mention length limit")
+            #expect(error.contains("too long"), "Should mention length limit")
         }
     }
     
     // MARK: - Boundary Testing
     
-    func testValidateMonetaryInput_AtBoundaries() {
+    @Test func validateMonetaryInput_AtBoundaries() {
         // Given: Values at validation boundaries
         let testCases: [(String, Bool, String)] = [
             ("0.00", true, "minimum value"),
@@ -255,16 +255,16 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should match expected validity
             switch result {
             case .valid(_):
-                XCTAssertTrue(shouldBeValid, "\(description) should be \(shouldBeValid ? "valid" : "invalid")")
+                #expect(shouldBeValid, "\(description) should be \(shouldBeValid ? "valid" : "invalid")")
             case .invalid(_):
-                XCTAssertFalse(shouldBeValid, "\(description) should be \(shouldBeValid ? "valid" : "invalid")")
+                #expect(!shouldBeValid, "\(description) should be \(shouldBeValid ? "valid" : "invalid")")
             }
         }
     }
     
     // MARK: - Double Conversion Tests
     
-    func testSafeDoubleValue_WithValidDecimal() {
+    @Test func safeDoubleValue_WithValidDecimal() {
         // Given: Valid decimal values
         let testCases: [(Decimal, Double)] = [
             (100, 100.0),
@@ -278,11 +278,12 @@ final class InputValidatorTests: XCTestCase {
             let result = InputValidator.safeDoubleValue(from: decimal)
             
             // Then: Should match expected value
-            XCTAssertEqual(result, expected, accuracy: 0.001, "Conversion of \(decimal) should equal \(expected)")
+            let difference = abs(result - expected)
+            #expect(difference <= 0.001, "Conversion of \(decimal) should equal \(expected). Difference: \(difference)")
         }
     }
     
-    func testSafeDoubleValue_WithExtremeValues() {
+    @Test func safeDoubleValue_WithExtremeValues() {
         // Given: Very large decimal values
         let largeDecimal = Decimal(999999999)
         
@@ -290,22 +291,21 @@ final class InputValidatorTests: XCTestCase {
         let result = InputValidator.safeDoubleValue(from: largeDecimal)
         
         // Then: Should return a finite value
-        XCTAssertTrue(result.isFinite, "Should return finite value for large decimals")
-        XCTAssertFalse(result.isInfinite, "Should not return infinite value")
-        XCTAssertFalse(result.isNaN, "Should not return NaN")
+        #expect(result.isFinite, "Should return finite value for large decimals")
+        #expect(!result.isInfinite, "Should not return infinite value")
+        #expect(!result.isNaN, "Should not return NaN")
     }
     
     // MARK: - Performance Tests
     
-    func testValidationPerformance() {
+    @Test(.timeLimit(.minutes(1))) func validationPerformance() {
         // Given: Large set of validation inputs
         let inputs = Array(repeating: "1234.56", count: 1000)
         
         // When: Measure validation performance
-        measure {
-            for input in inputs {
-                _ = InputValidator.validateMonetaryInput(input)
-            }
+        // Swift Testing uses @Test(.timeLimit()) for performance
+        for input in inputs {
+            _ = InputValidator.validateMonetaryInput(input)
         }
         
         // Then: Should complete within reasonable time
@@ -314,7 +314,7 @@ final class InputValidatorTests: XCTestCase {
     
     // MARK: - Integration Tests
     
-    func testValidationWithProgressiveTyping() {
+    @Test func validationWithProgressiveTyping() {
         // Given: Simulated user typing sequence
         let typingSequence = ["1", "12", "123", "123.", "123.4", "123.45"]
         
@@ -325,14 +325,14 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should handle progressive typing appropriately
             switch result {
             case .valid(let decimal):
-                XCTAssertGreaterThanOrEqual(decimal, 0, "Valid input should be non-negative")
+                #expect(decimal >= 0, "Valid input should be non-negative")
             case .invalid(let error):
-                XCTAssertFalse(error.isEmpty, "Invalid input should have descriptive error")
+                #expect(!error.isEmpty, "Invalid input should have descriptive error")
             }
         }
     }
     
-    func testValidationErrorMessages() {
+    @Test func validationErrorMessages() {
         // Given: Various invalid inputs with expected error types
         let errorCases: [(String, String)] = [
             ("", "empty"),
@@ -349,18 +349,18 @@ final class InputValidatorTests: XCTestCase {
             // Then: Should provide appropriate error message
             switch result {
             case .valid(_):
-                XCTFail("Input '\(input)' should be invalid")
+                Issue.record("Input '\(input)' should be invalid")
             case .invalid(let error):
-                XCTAssertFalse(error.isEmpty, "Error message should not be empty")
+                #expect(!error.isEmpty, "Error message should not be empty")
                 // Error messages should be user-friendly and descriptive
-                XCTAssertFalse(error.hasPrefix("Error:"), "Error messages should be user-friendly")
+                #expect(!error.hasPrefix("Error:"), "Error messages should be user-friendly")
             }
         }
     }
     
     // MARK: - Consistency Tests
     
-    func testValidationConsistency() {
+    @Test func validationConsistency() {
         // Given: Same input validated multiple times
         let testInput = "123.45"
         
@@ -374,9 +374,345 @@ final class InputValidatorTests: XCTestCase {
         for result in results {
             switch result {
             case .valid(let decimal):
-                XCTAssertEqual(decimal, 123.45, "All validations should return same result")
+                #expect(decimal == 123.45, "All validations should return same result")
             case .invalid(_):
-                XCTFail("Valid input should consistently validate as valid")
+                Issue.record("Valid input should consistently validate as valid")
+            }
+        }
+    }
+    
+    // MARK: - Account Name Validation Tests
+    
+    @Test func validateAccountName_WithValidNames() {
+        // Given: Various valid account names
+        let validNames = [
+            "Savings Account",
+            "Current Account",
+            "ISA 2025",
+            "Pension (Work)",
+            "Investment: S&P 500",
+            "Joint Account - John & Jane",
+            "Emergency Fund!",
+            "Travel $avings",
+            "401(k)",
+            "Roth IRA",
+            "Bitcoin Wallet",
+            "Property #1",
+            "A" // Single character minimum
+        ]
+        
+        for name in validNames {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(name)
+            
+            // Then: Should be valid
+            switch result {
+            case .valid(let validatedName):
+                #expect(validatedName == name.trimmingCharacters(in: .whitespacesAndNewlines))
+            case .invalid(let error):
+                Issue.record("Name '\(name)' should be valid but got error: \(error)")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_WithEmptyOrWhitespace() {
+        // Given: Empty or whitespace-only names
+        let invalidNames = ["", " ", "   ", "\t", "\n", "\r\n", "  \t  "]
+        
+        for name in invalidNames {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(name)
+            
+            // Then: Should be invalid
+            switch result {
+            case .valid(_):
+                Issue.record("Empty/whitespace name '\(name)' should be invalid")
+            case .invalid(let error):
+                #expect(error.contains("empty"), "Error should mention empty name")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_WithExcessiveLength() {
+        // Given: Name exceeding maximum length
+        let longName = String(repeating: "A", count: InputValidator.maxAccountNameLength + 1)
+        
+        // When: Validate account name
+        let result = InputValidator.validateAccountName(longName)
+        
+        // Then: Should be invalid
+        switch result {
+        case .valid(_):
+            Issue.record("Name exceeding max length should be invalid")
+        case .invalid(let error):
+            #expect(error.contains("too long") || error.contains("max"), "Error should mention length limit")
+        }
+    }
+    
+    @Test func validateAccountName_WithMaximumValidLength() {
+        // Given: Name at exactly maximum length
+        let maxLengthName = String(repeating: "A", count: InputValidator.maxAccountNameLength)
+        
+        // When: Validate account name
+        let result = InputValidator.validateAccountName(maxLengthName)
+        
+        // Then: Should be valid
+        switch result {
+        case .valid(let validatedName):
+            #expect(validatedName == maxLengthName)
+            #expect(validatedName.count == InputValidator.maxAccountNameLength)
+        case .invalid(let error):
+            Issue.record("Name at max length should be valid but got error: \(error)")
+        }
+    }
+    
+    @Test func validateAccountName_WithDuplicates() {
+        // Given: Existing account names
+        let existingNames = ["Savings Account", "Current Account", "ISA"]
+        
+        // Test case-insensitive duplicate detection
+        let duplicateTests = [
+            "Savings Account",      // Exact match
+            "savings account",      // Lowercase
+            "SAVINGS ACCOUNT",      // Uppercase
+            "SaViNgS AcCoUnT",      // Mixed case
+            " Savings Account ",    // With spaces (should trim and match)
+            "Current Account",
+            "isa",
+            "ISA"
+        ]
+        
+        for name in duplicateTests {
+            // When: Validate with existing names
+            let result = InputValidator.validateAccountName(name, existingNames: existingNames)
+            
+            // Then: Should be invalid due to duplicate
+            switch result {
+            case .valid(_):
+                Issue.record("Duplicate name '\(name)' should be invalid")
+            case .invalid(let error):
+                #expect(error.contains("already exists"), "Error should mention duplicate")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_WithNoDuplicates() {
+        // Given: Existing account names
+        let existingNames = ["Savings Account", "Current Account"]
+        
+        // Test non-duplicate names
+        let uniqueNames = ["Investment Account", "Pension", "Emergency Fund"]
+        
+        for name in uniqueNames {
+            // When: Validate with existing names
+            let result = InputValidator.validateAccountName(name, existingNames: existingNames)
+            
+            // Then: Should be valid
+            switch result {
+            case .valid(let validatedName):
+                #expect(validatedName == name)
+            case .invalid(let error):
+                Issue.record("Unique name '\(name)' should be valid but got error: \(error)")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_SecurityTests_NullBytes() {
+        // Given: Names with null bytes (security risk)
+        let riskyNames = [
+            "Account\0Name",
+            "\0StartWithNull",
+            "EndWithNull\0",
+            "Multiple\0Null\0Bytes"
+        ]
+        
+        for name in riskyNames {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(name)
+            
+            // Then: Should be invalid
+            switch result {
+            case .valid(_):
+                Issue.record("Name with null byte should be invalid for security")
+            case .invalid(let error):
+                #expect(error.contains("invalid"), "Should reject null bytes")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_SecurityTests_ControlCharacters() {
+        // Given: Names with control characters (could cause terminal issues)
+        let controlCharNames = [
+            "Account\u{001B}[31mRed",  // ANSI escape sequence
+            "Bell\u{0007}Sound",        // Bell character
+            "Backspace\u{0008}Test",    // Backspace
+            "Form\u{000C}Feed",         // Form feed
+            "\u{001F}Control"           // Unit separator
+        ]
+        
+        for name in controlCharNames {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(name)
+            
+            // Then: Should be invalid
+            switch result {
+            case .valid(_):
+                Issue.record("Name with control characters should be invalid")
+            case .invalid(let error):
+                #expect(error.contains("control"), "Should mention control characters")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_WithSpecialCharacters() {
+        // Given: Names with allowed special characters
+        let specialCharNames = [
+            "Account & Savings",
+            "401(k) Plan",
+            "ISA #2",
+            "Investment - Growth",
+            "Joint: John/Jane",
+            "Emergency $$$",
+            "Stocks @ 5%",
+            "Travel + Fun",
+            "Property [Main]",
+            "Fund {2025}",
+            "Crypto: BTC/ETH",
+            "Pension*",
+            "Account!",
+            "Fund~Growth",
+            "2025 Savings",
+            "100% Equity"
+        ]
+        
+        for name in specialCharNames {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(name)
+            
+            // Then: Should be valid (special chars allowed)
+            switch result {
+            case .valid(let validatedName):
+                #expect(validatedName == name)
+            case .invalid(let error):
+                Issue.record("Special char name '\(name)' should be valid but got error: \(error)")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_WithUnicodeCharacters() {
+        // Given: Names with various Unicode characters
+        let unicodeNames = [
+            "Savings 💰",
+            "Investment 📈",
+            "Pension 🏦",
+            "日本の貯金",  // Japanese
+            "Сбережения",  // Russian
+            "储蓄账户",     // Chinese
+            "حساب التوفير", // Arabic
+            "बचत खाता",    // Hindi
+            "🏠 Property",
+            "€ Euro Account",
+            "£ Sterling",
+            "¥ Yen Account"
+        ]
+        
+        for name in unicodeNames {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(name)
+            
+            // Then: Should be valid (Unicode allowed)
+            switch result {
+            case .valid(let validatedName):
+                #expect(validatedName == name)
+            case .invalid(let error):
+                Issue.record("Unicode name '\(name)' should be valid but got error: \(error)")
+            }
+        }
+    }
+    
+    @Test func validateAccountName_WithComplexUnicodeNormalization() {
+        // Given: Name with excessive Unicode normalization that could cause issues
+        // Using combining characters that expand significantly  
+        // This creates a string that appears to be 50 chars but expands to over 200 when normalized
+        let complexUnicode = String(repeating: "A\u{0301}\u{0302}\u{0303}\u{0304}", count: 50)
+        
+        // When: Validate account name
+        let result = InputValidator.validateAccountName(complexUnicode)
+        
+        // Then: Should be invalid due to expanded normalization exceeding limits
+        switch result {
+        case .valid(_):
+            Issue.record("Excessively complex Unicode should be invalid")
+        case .invalid(let error):
+            #expect(error.contains("complex") || error.contains("exceed") || error.contains("long"), "Should mention complexity or length")
+        }
+    }
+    
+    @Test func validateAccountName_TrimsWhitespace() {
+        // Given: Names with leading/trailing whitespace
+        let testCases: [(input: String, expected: String)] = [
+            (" Account Name", "Account Name"),
+            ("Account Name ", "Account Name"),
+            ("  Account Name  ", "Account Name"),
+            ("\tTabbed Name\t", "Tabbed Name"),
+            ("\nNewline Name\n", "Newline Name"),
+            ("  Multiple   Spaces  ", "Multiple   Spaces") // Internal spaces preserved
+        ]
+        
+        for testCase in testCases {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(testCase.input)
+            
+            // Then: Should trim and validate
+            switch result {
+            case .valid(let validatedName):
+                #expect(validatedName == testCase.expected, "Should trim whitespace correctly")
+            case .invalid(let error):
+                Issue.record("Should trim and validate but got error: \(error)")
+            }
+        }
+    }
+    
+    @Test(.timeLimit(.minutes(1))) func validateAccountName_PerformanceWithManyExistingNames() {
+        // Given: Large list of existing names
+        var existingNames: [String] = []
+        for i in 0..<1000 {
+            existingNames.append("Account \(i)")
+        }
+        
+        // When: Measure validation performance
+        // Swift Testing uses @Test(.timeLimit()) for performance
+        for i in 0..<100 {
+            _ = InputValidator.validateAccountName("New Account \(i)", existingNames: existingNames)
+        }
+        
+        // Then: Should complete within reasonable time
+        // XCTest measure will automatically fail if too slow
+    }
+    
+    @Test func validateAccountName_EdgeCases() {
+        // Given: Edge case names
+        let edgeCases: [(name: String, shouldBeValid: Bool, description: String)] = [
+            (".", true, "Single period"),
+            ("-", true, "Single dash"),
+            ("_", true, "Single underscore"),
+            ("123", true, "Numbers only"),
+            ("   A   ", true, "Single char with spaces (trims to valid)"),
+            ("Account\nName", false, "Newline in middle (control char)"),
+            ("Account\tName", false, "Tab in middle (control char)"),
+            ("Normal Name", true, "Normal name with space")
+        ]
+        
+        for testCase in edgeCases {
+            // When: Validate account name
+            let result = InputValidator.validateAccountName(testCase.name)
+            
+            // Then: Should match expected validity
+            switch result {
+            case .valid(_):
+                #expect(testCase.shouldBeValid, "\(testCase.description) should be \(testCase.shouldBeValid ? "valid" : "invalid")")
+            case .invalid(_):
+                #expect(!testCase.shouldBeValid, "\(testCase.description) should be \(testCase.shouldBeValid ? "valid" : "invalid")")
             }
         }
     }

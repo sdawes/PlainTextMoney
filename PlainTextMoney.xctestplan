@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "E697FAC9-8876-4E42-9458-AB69FE9C7250",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:PlainTextMoney.xcodeproj",
+      "identifier" : "1F702AAC2E39315700C9E564",
+      "name" : "PlainTextMoney"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:PlainTextMoney.xcodeproj",
+        "identifier" : "1FFB57872E48C1C200C5A351",
+        "name" : "PlainTextMoneyTests"
+      }
+    }
+  ],
+  "version" : 1
+}

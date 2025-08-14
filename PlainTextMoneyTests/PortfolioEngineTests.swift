@@ -5,7 +5,7 @@
 //  Created by Claude on 10/08/2025.
 //
 
-import XCTest
+import Testing
 import SwiftData
 import Foundation
 @testable import PlainTextMoney
@@ -13,28 +13,15 @@ import Foundation
 /// Tests for PortfolioEngine
 /// Verifies background actor calculations and cross-actor data handling
 @MainActor
-final class PortfolioEngineTests: XCTestCase {
-    
-    var context: ModelContext!
-    var container: ModelContainer!
-    var engine: PortfolioEngine!
-    
-    override func setUp() async throws {
-        container = try TestHelpers.createTestContainer()
-        context = ModelContext(container)
-        engine = PortfolioEngine(modelContainer: container)
-    }
-    
-    override func tearDown() async throws {
-        context = nil
-        container = nil
-        engine = nil
-    }
+struct PortfolioEngineTests {
     
     // MARK: - Portfolio Timeline Generation Tests
     
-    func testGeneratePortfolioTimeline_WithSimplePortfolio() async throws {
+    @Test func generatePortfolioTimeline_WithSimplePortfolio() async throws {
         // Given: Simple portfolio with known values
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let (accounts, expectedTotal) = TestHelpers.createTestPortfolio(in: context)
         saveContext(context)
         
@@ -44,30 +31,35 @@ final class PortfolioEngineTests: XCTestCase {
         let timeline = await engine.generatePortfolioTimeline(accountIDs: accountIDs)
         
         // Then: Should have correct number of timeline points
-        XCTAssertEqual(timeline.count, 4, "Should have 4 timeline points (2 updates per account)")
+        #expect(timeline.count == 4, "Should have 4 timeline points (2 updates per account)")
         
         // Verify final portfolio value matches expected total
         guard let finalPoint = timeline.last else {
-            XCTFail("Timeline should have at least one point")
+            Issue.record("Timeline should have at least one point")
             return
         }
         
-        TestHelpers.assertDecimalEqual(finalPoint.value, expectedTotal)
+        TestHelpers.expectDecimalEqual(finalPoint.value, expectedTotal)
     }
     
-    func testGeneratePortfolioTimeline_WithEmptyPortfolio() async throws {
+    @Test func generatePortfolioTimeline_WithEmptyPortfolio() async throws {
         // Given: Empty array of account IDs
+        let container = try TestHelpers.createTestContainer()
+        let engine = PortfolioEngine(modelContainer: container)
         let accountIDs: [PersistentIdentifier] = []
         
         // When: Generate timeline
         let timeline = await engine.generatePortfolioTimeline(accountIDs: accountIDs)
         
         // Then: Should return empty timeline
-        XCTAssertEqual(timeline.count, 0, "Empty portfolio should return empty timeline")
+        #expect(timeline.count == 0, "Empty portfolio should return empty timeline")
     }
     
-    func testGeneratePortfolioTimeline_WithChronologicalOrdering() async throws {
+    @Test func generatePortfolioTimeline_WithChronologicalOrdering() async throws {
         // Given: Portfolio with updates in mixed chronological order
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let account1 = TestHelpers.createTestAccount(name: "Account 1", in: context)
         let account2 = TestHelpers.createTestAccount(name: "Account 2", in: context)
         
@@ -111,35 +103,37 @@ final class PortfolioEngineTests: XCTestCase {
         let timeline = await engine.generatePortfolioTimeline(accountIDs: accountIDs)
         
         // Then: Timeline should be in chronological order
-        XCTAssertEqual(timeline.count, 4)
+        #expect(timeline.count == 4)
         
         // Verify chronological progression
         for i in 1..<timeline.count {
-            XCTAssertLessThanOrEqual(
-                timeline[i-1].date,
-                timeline[i].date,
+            #expect(
+                timeline[i-1].date <= timeline[i].date,
                 "Timeline should be in chronological order"
             )
         }
         
         // Verify portfolio values accumulate correctly
         // Day 1: Account1=100, Account2=0 → Total=100
-        TestHelpers.assertDecimalEqual(timeline[0].value, 100)
+        TestHelpers.expectDecimalEqual(timeline[0].value, 100)
         
         // Day 2: Account1=300, Account2=0 → Total=300  
-        TestHelpers.assertDecimalEqual(timeline[1].value, 300)
+        TestHelpers.expectDecimalEqual(timeline[1].value, 300)
         
         // Day 2 later: Account1=300, Account2=200 → Total=500
-        TestHelpers.assertDecimalEqual(timeline[2].value, 500)
+        TestHelpers.expectDecimalEqual(timeline[2].value, 500)
         
         // Day 3: Account1=300, Account2=400 → Total=700
-        TestHelpers.assertDecimalEqual(timeline[3].value, 700)
+        TestHelpers.expectDecimalEqual(timeline[3].value, 700)
     }
     
     // MARK: - Filtered Portfolio Timeline Tests
     
-    func testGenerateFilteredPortfolioTimeline_LastUpdate() async throws {
+    @Test func generateFilteredPortfolioTimeline_LastUpdate() async throws {
         // Given: Portfolio with multiple updates
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let accounts = TestHelpers.createComplexTestPortfolio(in: context)
         saveContext(context)
         
@@ -153,14 +147,17 @@ final class PortfolioEngineTests: XCTestCase {
         )
         
         // Then: Should return exactly 2 points for "Since Last Update"
-        XCTAssertEqual(timeline.count, 2, "Last update should return exactly 2 points")
+        #expect(timeline.count == 2, "Last update should return exactly 2 points")
         
         // Verify points are chronologically ordered (or at least not reversed)
-        XCTAssertLessThanOrEqual(timeline[0].date, timeline[1].date)
+        #expect(timeline[0].date <= timeline[1].date)
     }
     
-    func testGenerateFilteredPortfolioTimeline_WithStartDate() async throws {
+    @Test func generateFilteredPortfolioTimeline_WithStartDate() async throws {
         // Given: Portfolio with updates over time
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let accounts = TestHelpers.createComplexTestPortfolio(in: context)
         saveContext(context)
         
@@ -180,7 +177,7 @@ final class PortfolioEngineTests: XCTestCase {
             let isAtOrAfterStart = point.date >= startDate
             let isBoundaryPoint = timeline.first == point && point.date < startDate
             
-            XCTAssertTrue(
+            #expect(
                 isAtOrAfterStart || isBoundaryPoint,
                 "Point at \\(point.date) should be after \\(startDate) or be a boundary point"
             )
@@ -189,8 +186,11 @@ final class PortfolioEngineTests: XCTestCase {
     
     // MARK: - Portfolio Performance Calculation Tests
     
-    func testCalculatePortfolioPerformance_LastUpdate() async throws {
+    @Test func calculatePortfolioPerformance_LastUpdate() async throws {
         // Given: Portfolio with known performance
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let (accounts, _) = TestHelpers.createTestPortfolio(in: context)
         saveContext(context)
         
@@ -203,19 +203,22 @@ final class PortfolioEngineTests: XCTestCase {
         )
         
         // Then: Should have valid performance data
-        XCTAssertTrue(performance.hasData, "Should have performance data")
-        XCTAssertEqual(performance.actualPeriodLabel, "Since last update")
+        #expect(performance.hasData, "Should have performance data")
+        #expect(performance.actualPeriodLabel == "Since last update")
         
         // Note: Portfolio calculation uses timeline approach, not simple addition
         // The actual result should be consistent, so test for reasonable ranges
-        XCTAssertGreaterThan(performance.percentage, -10.0, "Performance should be within reasonable range")
-        XCTAssertLessThan(performance.percentage, 15.0, "Performance should be within reasonable range")
+        #expect(performance.percentage > -10.0, "Performance should be within reasonable range")
+        #expect(performance.percentage < 15.0, "Performance should be within reasonable range")
         // Focus on testing that calculation is stable and returns valid data
-        XCTAssertNotEqual(performance.absolute, 0, "Should have some portfolio change")
+        #expect(performance.absolute != 0, "Should have some portfolio change")
     }
     
-    func testCalculatePortfolioPerformance_AllTime() async throws {
+    @Test func calculatePortfolioPerformance_AllTime() async throws {
         // Given: Portfolio with all-time performance
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let accounts = TestHelpers.createComplexTestPortfolio(in: context)
         saveContext(context)
         
@@ -228,18 +231,21 @@ final class PortfolioEngineTests: XCTestCase {
         )
         
         // Then: Should show all-time performance
-        XCTAssertTrue(performance.hasData, "Should have all-time performance data")
-        XCTAssertTrue(performance.actualPeriodLabel.contains("Since"), "Should show since earliest date")
+        #expect(performance.hasData, "Should have all-time performance data")
+        #expect(performance.actualPeriodLabel.contains("Since"), "Should show since earliest date")
         
         // Should show positive performance (complex portfolio is designed to grow)
-        XCTAssertTrue(performance.isPositive, "Complex portfolio should show positive all-time performance")
-        XCTAssertGreaterThan(performance.absolute, 0, "Should have positive absolute change")
+        #expect(performance.isPositive, "Complex portfolio should show positive all-time performance")
+        #expect(performance.absolute > 0, "Should have positive absolute change")
     }
     
     // MARK: - Cross-Actor Data Handling Tests
     
-    func testCrossActorDataHandling_WithPersistentIdentifiers() async throws {
+    @Test func crossActorDataHandling_WithPersistentIdentifiers() async throws {
         // Given: Accounts created in main context
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let (accounts, expectedTotal) = TestHelpers.createTestPortfolio(in: context)
         saveContext(context)
         
@@ -250,22 +256,25 @@ final class PortfolioEngineTests: XCTestCase {
         let timeline = await engine.generatePortfolioTimeline(accountIDs: accountIDs)
         
         // Then: Should successfully process data despite cross-actor boundary
-        XCTAssertGreaterThan(timeline.count, 0, "Should generate timeline from PersistentIdentifiers")
+        #expect(timeline.count > 0, "Should generate timeline from PersistentIdentifiers")
         
         guard let finalValue = timeline.last?.value else {
-            XCTFail("Timeline should have final value")
+            Issue.record("Timeline should have final value")
             return
         }
         
-        TestHelpers.assertDecimalEqual(finalValue, expectedTotal, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(finalValue, expectedTotal, accuracy: 0.01)
     }
     
     // MARK: - Error Handling Tests
     
-    func testHandleInvalidPersistentIdentifiers() async throws {
+    @Test func handleInvalidPersistentIdentifiers() async throws {
         // Given: Invalid/non-existent PersistentIdentifier
         // This is tricky to test directly, but we can test with empty results
         
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let validAccounts = TestHelpers.createComplexTestPortfolio(in: context)
         saveContext(context)
         
@@ -282,13 +291,16 @@ final class PortfolioEngineTests: XCTestCase {
         
         // Then: Should handle gracefully (return empty or skip invalid IDs)
         // Engine should not crash and should return valid result
-        XCTAssertNotNil(timeline, "Should return non-nil result even with invalid IDs")
+        #expect(timeline != nil, "Should return non-nil result even with invalid IDs")
     }
     
     // MARK: - Performance Consistency Tests
     
-    func testPerformanceCalculationConsistency() async throws {
+    @Test func performanceCalculationConsistency() async throws {
         // Given: Same portfolio data
+        let container = try TestHelpers.createTestContainer()
+        let context = ModelContext(container)
+        let engine = PortfolioEngine(modelContainer: container)
         let (accounts, _) = TestHelpers.createTestPortfolio(in: context)
         saveContext(context)
         
@@ -306,10 +318,10 @@ final class PortfolioEngineTests: XCTestCase {
         )
         
         // Then: Results should be identical
-        XCTAssertEqual(performance1.hasData, performance2.hasData)
-        XCTAssertEqual(performance1.isPositive, performance2.isPositive)
-        TestHelpers.assertPercentageEqual(performance1.percentage, performance2.percentage, accuracy: 0.01)
-        TestHelpers.assertDecimalEqual(performance1.absolute, performance2.absolute, accuracy: 0.01)
-        XCTAssertEqual(performance1.actualPeriodLabel, performance2.actualPeriodLabel)
+        #expect(performance1.hasData == performance2.hasData)
+        #expect(performance1.isPositive == performance2.isPositive)
+        TestHelpers.expectPercentageEqual(performance1.percentage, performance2.percentage, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(performance1.absolute, performance2.absolute, accuracy: 0.01)
+        #expect(performance1.actualPeriodLabel == performance2.actualPeriodLabel)
     }
 }

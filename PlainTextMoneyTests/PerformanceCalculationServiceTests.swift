@@ -5,7 +5,7 @@
 //  Created by Claude on 10/08/2025.
 //
 
-import XCTest
+import Testing
 import SwiftData
 import Foundation
 @testable import PlainTextMoney
@@ -13,22 +13,13 @@ import Foundation
 /// Tests for PerformanceCalculationService
 /// Verifies that financial calculations return correct results
 @MainActor
-final class PerformanceCalculationServiceTests: XCTestCase {
-    
-    var context: ModelContext!
-    
-    override func setUp() async throws {
-        context = try createTestContext()
-    }
-    
-    override func tearDown() async throws {
-        context = nil
-    }
+struct PerformanceCalculationServiceTests {
     
     // MARK: - Last Update Tests
     
-    func testCalculateAccountChangeFromLastUpdate_WithTwoUpdates() throws {
+    @Test func calculateAccountChangeFromLastUpdate_WithTwoUpdates() throws {
         // Given: Account with two updates showing growth
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Growth Test", in: context)
         
         let calendar = Calendar.current
@@ -56,14 +47,15 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then: Should show 20% gain and £200 absolute gain
-        XCTAssertTrue(result.hasData, "Should have data for calculation")
-        XCTAssertTrue(result.isPositive, "Should show positive growth")
-        TestHelpers.assertPercentageEqual(result.percentage, 20.0, accuracy: 0.1)
-        TestHelpers.assertDecimalEqual(result.absolute, 200)
+        #expect(result.hasData, "Should have data for calculation")
+        #expect(result.isPositive, "Should show positive growth")
+        TestHelpers.expectPercentageEqual(result.percentage, 20.0, accuracy: 0.1)
+        TestHelpers.expectDecimalEqual(result.absolute, 200)
     }
     
-    func testCalculateAccountChangeFromLastUpdate_WithLoss() throws {
+    @Test func calculateAccountChangeFromLastUpdate_WithLoss() throws {
         // Given: Account with loss
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Loss Test", in: context)
         
         let calendar = Calendar.current
@@ -89,14 +81,15 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then
-        XCTAssertTrue(result.hasData)
-        XCTAssertFalse(result.isPositive, "Should show negative performance")
-        TestHelpers.assertPercentageEqual(result.percentage, -20.0, accuracy: 0.1)
-        TestHelpers.assertDecimalEqual(result.absolute, -200)
+        #expect(result.hasData)
+        #expect(!result.isPositive, "Should show negative performance")
+        TestHelpers.expectPercentageEqual(result.percentage, -20.0, accuracy: 0.1)
+        TestHelpers.expectDecimalEqual(result.absolute, -200)
     }
     
-    func testCalculateAccountChangeFromLastUpdate_WithSingleUpdate() throws {
+    @Test func calculateAccountChangeFromLastUpdate_WithSingleUpdate() throws {
         // Given: Account with only one update
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Single Update", in: context)
         
         let _ = TestHelpers.createTestUpdate(
@@ -112,13 +105,14 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then: Should indicate no data available
-        XCTAssertFalse(result.hasData, "Should not have data for single update scenario")
-        XCTAssertEqual(result.percentage, 0.0)
-        XCTAssertEqual(result.absolute, 0)
+        #expect(!result.hasData, "Should not have data for single update scenario")
+        #expect(result.percentage == 0.0)
+        #expect(result.absolute == 0)
     }
     
-    func testCalculateAccountChangeFromLastUpdate_WithNoUpdates() throws {
+    @Test func calculateAccountChangeFromLastUpdate_WithNoUpdates() throws {
         // Given: Account with no updates
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Empty Account", in: context)
         saveContext(context)
         
@@ -126,13 +120,14 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then: Should indicate no data available
-        XCTAssertFalse(result.hasData, "Should not have data for empty account")
+        #expect(!result.hasData, "Should not have data for empty account")
     }
     
     // MARK: - All Time Tests
     
-    func testCalculateAccountChangeAllTime_WithMultipleUpdates() throws {
+    @Test func calculateAccountChangeAllTime_WithMultipleUpdates() throws {
         // Given: Account with progression over time
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "All Time Test", in: context)
         
         let calendar = Calendar.current
@@ -168,16 +163,17 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeAllTime(account: account)
         
         // Then: Should show 100% gain from first to last
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
-        TestHelpers.assertPercentageEqual(result.percentage, 100.0, accuracy: 0.1)
-        TestHelpers.assertDecimalEqual(result.absolute, 500)
+        #expect(result.hasData)
+        #expect(result.isPositive)
+        TestHelpers.expectPercentageEqual(result.percentage, 100.0, accuracy: 0.1)
+        TestHelpers.expectDecimalEqual(result.absolute, 500)
     }
     
     // MARK: - One Month Tests
     
-    func testCalculateAccountChangeOneMonth() throws {
+    @Test func calculateAccountChangeOneMonth() throws {
         // Given: Account with updates spanning more than one month
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Month Test", in: context)
         
         let calendar = Calendar.current
@@ -213,19 +209,20 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
         
         // Then: Should calculate from ~1 month ago value to current
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
+        #expect(result.hasData)
+        #expect(result.isPositive)
         
         // Should calculate from 2 months ago (£800) to current (£1080)
         // Growth: £1080 - £800 = £280 gain on £800 base = 35% gain
-        XCTAssertGreaterThan(result.percentage, 34.0)
-        XCTAssertLessThan(result.percentage, 36.0)
+        #expect(result.percentage > 34.0)
+        #expect(result.percentage < 36.0)
     }
     
     // MARK: - Three Months Tests
     
-    func testCalculateAccountChangeThreeMonths() throws {
+    @Test func calculateAccountChangeThreeMonths() throws {
         // Given: Account with updates spanning more than three months
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Three Month Test", in: context)
         
         let calendar = Calendar.current
@@ -261,17 +258,18 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         
         // Then: Should calculate from ~3 months ago value to current
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
+        #expect(result.hasData)
+        #expect(result.isPositive)
         
         // Should calculate from 3+ months ago (£1200) to current (£1440)
         // Growth: £1440 - £1200 = £240 gain on £1200 base = 20% gain
-        XCTAssertGreaterThan(result.percentage, 19.0)
-        XCTAssertLessThan(result.percentage, 21.0)
+        #expect(result.percentage > 19.0)
+        #expect(result.percentage < 21.0)
     }
     
-    func testCalculateAccountChangeThreeMonthsAccountNewerThan3Months() throws {
+    @Test func calculateAccountChangeThreeMonthsAccountNewerThan3Months() throws {
         // Given: Account that's only 2 months old
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "New Account", in: context)
         
         let calendar = Calendar.current
@@ -299,17 +297,18 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         
         // Then: Should use first update as baseline since account is newer than 3 months
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
+        #expect(result.hasData)
+        #expect(result.isPositive)
         
         // Should calculate from first update (£500) to current (£700)
         // Growth: £700 - £500 = £200 gain on £500 base = 40% gain
-        TestHelpers.assertPercentageEqual(result.percentage, 40.0, accuracy: 0.1)
-        TestHelpers.assertDecimalEqual(result.absolute, 200)
+        TestHelpers.expectPercentageEqual(result.percentage, 40.0, accuracy: 0.1)
+        TestHelpers.expectDecimalEqual(result.absolute, 200)
     }
     
-    func testCalculateAccountChangeThreeMonthsAbsoluteValues() throws {
+    @Test func calculateAccountChangeThreeMonthsAbsoluteValues() throws {
         // Given: Account with specific monetary values for precise absolute testing
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Absolute Value Test", in: context)
         
         let calendar = Calendar.current
@@ -345,18 +344,19 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         
         // Then: Verify exact absolute values
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
+        #expect(result.hasData)
+        #expect(result.isPositive)
         
         // Absolute change should be exactly £3,250
-        TestHelpers.assertDecimalEqual(result.absolute, 3250, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(result.absolute, 3250, accuracy: 0.01)
         
         // Percentage should be 26% (3250/12500 = 0.26)
-        TestHelpers.assertPercentageEqual(result.percentage, 26.0, accuracy: 0.1)
+        TestHelpers.expectPercentageEqual(result.percentage, 26.0, accuracy: 0.1)
     }
     
-    func testCalculateAccountChangeThreeMonthsLoss() throws {
+    @Test func calculateAccountChangeThreeMonthsLoss() throws {
         // Given: Account with a loss over 3 months
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Loss Test", in: context)
         
         let calendar = Calendar.current
@@ -384,18 +384,19 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         
         // Then: Verify loss values are correct
-        XCTAssertTrue(result.hasData)
-        XCTAssertFalse(result.isPositive, "Should indicate a loss")
+        #expect(result.hasData)
+        #expect(!result.isPositive, "Should indicate a loss")
         
         // Absolute change should be exactly -£4,000
-        TestHelpers.assertDecimalEqual(result.absolute, -4000, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(result.absolute, -4000, accuracy: 0.01)
         
         // Percentage should be -20% (-4000/20000 = -0.20)
-        TestHelpers.assertPercentageEqual(result.percentage, -20.0, accuracy: 0.1)
+        TestHelpers.expectPercentageEqual(result.percentage, -20.0, accuracy: 0.1)
     }
     
-    func testCalculateAccountChangeThreeMonthsPrecisionTest() throws {
+    @Test func calculateAccountChangeThreeMonthsPrecisionTest() throws {
         // Given: Account with decimal precision values
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Precision Test", in: context)
         
         let calendar = Calendar.current
@@ -423,20 +424,21 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeThreeMonths(account: account)
         
         // Then: Verify decimal precision is maintained
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
+        #expect(result.hasData)
+        #expect(result.isPositive)
         
         // Absolute change: £124.23
-        TestHelpers.assertDecimalEqual(result.absolute, Decimal(string: "124.23")!, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(result.absolute, Decimal(string: "124.23")!, accuracy: 0.01)
         
         // Percentage: 124.23/1234.56 ≈ 10.06%
-        TestHelpers.assertPercentageEqual(result.percentage, 10.06, accuracy: 0.1)
+        TestHelpers.expectPercentageEqual(result.percentage, 10.06, accuracy: 0.1)
     }
     
     // MARK: - One Year Tests
     
-    func testCalculateAccountChangeOneYear() throws {
+    @Test func calculateAccountChangeOneYear() throws {
         // Given: Account with updates spanning more than one year
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Year Test", in: context)
         
         let calendar = Calendar.current
@@ -472,15 +474,16 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeOneYear(account: account)
         
         // Then: Should show substantial gain from ~1 year ago
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
-        XCTAssertGreaterThan(result.percentage, 90.0) // Close to 100% gain
+        #expect(result.hasData)
+        #expect(result.isPositive)
+        #expect(result.percentage > 90.0) // Close to 100% gain
     }
     
     // MARK: - Edge Cases
     
-    func testCalculateWithZeroInitialValue() throws {
+    @Test func calculateWithZeroInitialValue() throws {
         // Given: Account starting with £0
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Zero Start", in: context)
         
         let _ = TestHelpers.createTestUpdate(value: 0, date: Date(timeIntervalSinceNow: -86400), account: account, in: context)
@@ -492,13 +495,14 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then: Should handle division by zero gracefully
-        XCTAssertFalse(result.hasData, "Should not calculate percentage from zero base")
-        XCTAssertEqual(result.percentage, 0.0)
-        XCTAssertEqual(result.absolute, 0)
+        #expect(!result.hasData, "Should not calculate percentage from zero base")
+        #expect(result.percentage == 0.0)
+        #expect(result.absolute == 0)
     }
     
-    func testCalculateWithIdenticalValues() throws {
+    @Test func calculateWithIdenticalValues() throws {
         // Given: Account with no change
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "No Change", in: context)
         
         let calendar = Calendar.current
@@ -523,16 +527,17 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then: Should show 0% change
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive) // 0% is considered positive (no loss)
-        TestHelpers.assertPercentageEqual(result.percentage, 0.0, accuracy: 0.01)
-        TestHelpers.assertDecimalEqual(result.absolute, 0)
+        #expect(result.hasData)
+        #expect(result.isPositive) // 0% is considered positive (no loss)
+        TestHelpers.expectPercentageEqual(result.percentage, 0.0, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(result.absolute, 0)
     }
     
     // MARK: - Precision Tests
     
-    func testDecimalPrecisionInCalculations() throws {
+    @Test func decimalPrecisionInCalculations() throws {
         // Given: Account with precise decimal values
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Precision Test", in: context)
         
         // Use precise decimal values to test rounding
@@ -555,20 +560,21 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let result = PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         
         // Then: Should maintain decimal precision
-        XCTAssertTrue(result.hasData)
-        XCTAssertTrue(result.isPositive)
+        #expect(result.hasData)
+        #expect(result.isPositive)
         
         let expectedChange = Decimal(string: "50.34")! // 1050.67 - 1000.33
-        TestHelpers.assertDecimalEqual(result.absolute, expectedChange, accuracy: 0.01)
+        TestHelpers.expectDecimalEqual(result.absolute, expectedChange, accuracy: 0.01)
         
         // Percentage should be approximately 5.03%
-        TestHelpers.assertPercentageEqual(result.percentage, 5.03, accuracy: 0.1)
+        TestHelpers.expectPercentageEqual(result.percentage, 5.03, accuracy: 0.1)
     }
     
     // MARK: - Chart Data Filtering Tests
     
-    func testThreeMonthChartDataFiltering() throws {
+    @Test func threeMonthChartDataFiltering() throws {
         // Given: Account with updates spanning more than 3 months
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Chart Filter Test", in: context)
         
         let calendar = Calendar.current
@@ -599,24 +605,25 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let filteredUpdates = account.updates.filter { $0.date >= threeMonthsAgo }.sorted { $0.date < $1.date }
         
         // Then: Should include approximately the last 3 months of data
-        XCTAssertGreaterThanOrEqual(filteredUpdates.count, 3, "Should have at least 3 updates in 3-month window")
-        XCTAssertLessThanOrEqual(filteredUpdates.count, 5, "Should not have more than 5 updates in 3-month window")
+        #expect(filteredUpdates.count >= 3, "Should have at least 3 updates in 3-month window")
+        #expect(filteredUpdates.count <= 5, "Should not have more than 5 updates in 3-month window")
         
         // Verify the oldest included update is not older than 3 months + some tolerance
         if let oldestFiltered = filteredUpdates.first {
             let daysSinceOldest = calendar.dateComponents([.day], from: oldestFiltered.date, to: baseDate).day ?? 0
-            XCTAssertLessThanOrEqual(daysSinceOldest, 100, "Oldest filtered update should be within ~3 months (allowing some tolerance)")
+            #expect(daysSinceOldest <= 100, "Oldest filtered update should be within ~3 months (allowing some tolerance)")
         }
         
         // Verify the newest update is included
         if let newestFiltered = filteredUpdates.last {
             let newestOriginal = allUpdates.sorted { $0.date < $1.date }.last!
-            XCTAssertEqual(newestFiltered.value, newestOriginal.value, "Most recent update should be included")
+            #expect(newestFiltered.value == newestOriginal.value, "Most recent update should be included")
         }
     }
     
-    func testThreeMonthChartDataBoundaryConditions() throws {
+    @Test func threeMonthChartDataBoundaryConditions() throws {
         // Given: Account with updates exactly at 3-month boundaries
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Boundary Test", in: context)
         
         let calendar = Calendar.current
@@ -638,15 +645,16 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let filteredUpdates = account.updates.filter { $0.date >= exactlyThreeMonthsAgo }.sorted { $0.date < $1.date }
         
         // Then: Should include the boundary update and all after, but not before
-        XCTAssertEqual(filteredUpdates.count, 3, "Should include exactly 3 updates (boundary + 2 after)")
-        XCTAssertEqual(filteredUpdates.first?.value, exactBoundaryUpdate.value, "Should include the boundary update")
-        XCTAssertTrue(filteredUpdates.contains { $0.value == 1200 }, "Should include update just after boundary")
-        XCTAssertTrue(filteredUpdates.contains { $0.value == 1300 }, "Should include current update")
-        XCTAssertFalse(filteredUpdates.contains { $0.value == 1000 }, "Should exclude update just before boundary")
+        #expect(filteredUpdates.count == 3, "Should include exactly 3 updates (boundary + 2 after)")
+        #expect(filteredUpdates.first?.value == exactBoundaryUpdate.value, "Should include the boundary update")
+        #expect(filteredUpdates.contains { $0.value == 1200 }, "Should include update just after boundary")
+        #expect(filteredUpdates.contains { $0.value == 1300 }, "Should include current update")
+        #expect(!filteredUpdates.contains { $0.value == 1000 }, "Should exclude update just before boundary")
     }
     
-    func testThreeMonthChartDataWithSparseUpdates() throws {
+    @Test func threeMonthChartDataWithSparseUpdates() throws {
         // Given: Account with very few updates in 3-month window
+        let context = try TestHelpers.createTestContext()
         let account = TestHelpers.createTestAccount(name: "Sparse Data Test", in: context)
         
         let calendar = Calendar.current
@@ -664,15 +672,15 @@ final class PerformanceCalculationServiceTests: XCTestCase {
         let filteredUpdates = account.updates.filter { $0.date >= threeMonthsAgo }.sorted { $0.date < $1.date }
         
         // Then: Should handle sparse data gracefully
-        XCTAssertEqual(filteredUpdates.count, 2, "Should include exactly 2 updates in 3-month window")
-        XCTAssertEqual(filteredUpdates.first?.value, oldUpdate.value, "Should include the older update in window")
-        XCTAssertEqual(filteredUpdates.last?.value, newUpdate.value, "Should include the current update")
-        XCTAssertFalse(filteredUpdates.contains { $0.value == 1000 }, "Should exclude very old update")
+        #expect(filteredUpdates.count == 2, "Should include exactly 2 updates in 3-month window")
+        #expect(filteredUpdates.first?.value == oldUpdate.value, "Should include the older update in window")
+        #expect(filteredUpdates.last?.value == newUpdate.value, "Should include the current update")
+        #expect(!filteredUpdates.contains { $0.value == 1000 }, "Should exclude very old update")
         
         // Verify chart data would work with this sparse data
         let chartPoints = filteredUpdates.map { ChartDataPoint(date: $0.date, value: $0.value) }
-        XCTAssertEqual(chartPoints.count, 2, "Chart should handle 2 data points")
-        XCTAssertEqual(chartPoints.first?.value, 1500, "First chart point should match first update")
-        XCTAssertEqual(chartPoints.last?.value, 1800, "Last chart point should match last update")
+        #expect(chartPoints.count == 2, "Chart should handle 2 data points")
+        #expect(chartPoints.first?.value == 1500, "First chart point should match first update")
+        #expect(chartPoints.last?.value == 1800, "Last chart point should match last update")
     }
 }
