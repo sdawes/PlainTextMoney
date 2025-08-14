@@ -23,8 +23,6 @@ actor PortfolioEngine {
     /// - Parameter accountIDs: IDs of accounts to include in timeline
     /// - Returns: Array of chart data points representing portfolio value over time
     func generatePortfolioTimeline(accountIDs: [PersistentIdentifier]) async -> [ChartDataPoint] {
-        // TEMPORARILY: Use only legacy timeline generation to debug chart issue
-        print("📊 Using legacy timeline generation")
         return await generatePortfolioTimelineLegacy(accountIDs: accountIDs)
     }
     
@@ -83,19 +81,8 @@ actor PortfolioEngine {
         
         // Handle special case for lastUpdate
         if period == .lastUpdate && startDate == nil {
-            // For "Last Update", filter to recent updates only
-            let calendar = Calendar.current
-            let startOfToday = calendar.startOfDay(for: Date())
-            
-            // Get timeline points from start of today onwards
-            let todaysTimeline = fullTimeline.filter { $0.date >= startOfToday }
-            
-            // If no updates today, show the last point for reference
-            if todaysTimeline.isEmpty && !fullTimeline.isEmpty {
-                return [fullTimeline.last!]
-            }
-            
-            return todaysTimeline
+            // For "Since Last Update", show only 2 points: before and after the most recent update
+            return await generateLastUpdateTimeline(accountIDs: accountIDs)
         }
         
         guard let startDate = startDate else {
@@ -103,6 +90,53 @@ actor PortfolioEngine {
         }
         
         return filterPortfolioTimeline(fullTimeline, from: startDate)
+    }
+    
+    /// Generate 2-point timeline for "Since Last Update" showing before/after most recent update
+    /// - Parameter accountIDs: IDs of accounts to include
+    /// - Returns: Array with exactly 2 chart data points
+    private func generateLastUpdateTimeline(accountIDs: [PersistentIdentifier]) async -> [ChartDataPoint] {
+        let accounts = fetchAccounts(withIDs: accountIDs)
+        let activeAccounts = accounts.filter { $0.isActive }
+        
+        guard !activeAccounts.isEmpty else { return [] }
+        
+        // Find the most recent update across ALL accounts
+        let allUpdates = activeAccounts.flatMap { $0.updates }.sorted { $0.date < $1.date }
+        guard let mostRecentUpdate = allUpdates.last else { return [] }
+        
+        let mostRecentAccountName = mostRecentUpdate.account?.name
+        
+        // Calculate current portfolio total
+        let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
+            return total + (latestUpdate?.value ?? 0)
+        }
+        
+        // Calculate portfolio total just before the most recent update
+        let beforeLastUpdateTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let sortedUpdates = account.updates.sorted { $0.date < $1.date }
+            
+            if account.name == mostRecentAccountName {
+                if sortedUpdates.count >= 2 {
+                    let previousValue = sortedUpdates[sortedUpdates.count - 2].value
+                    return total + previousValue
+                } else {
+                    return total // New account, exclude from baseline
+                }
+            } else {
+                let currentValue = sortedUpdates.last?.value ?? 0
+                return total + currentValue
+            }
+        }
+        
+        // Create exactly 2 data points
+        let beforeDate = Calendar.current.date(byAdding: .second, value: -1, to: mostRecentUpdate.date) ?? mostRecentUpdate.date
+        
+        return [
+            ChartDataPoint(date: beforeDate, value: beforeLastUpdateTotal),
+            ChartDataPoint(date: mostRecentUpdate.date, value: currentTotal)
+        ]
     }
     
     // MARK: - Performance Calculations

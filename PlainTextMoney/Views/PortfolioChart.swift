@@ -85,11 +85,6 @@ struct PortfolioChart: View {
     private var chartDataPoints: [ChartDataPoint] {
         // Use pre-calculated data if available
         if let preCalculatedData = preCalculatedData {
-            // DEBUG: Log chart data being used
-            print("📊 DEBUG: PortfolioChart using pre-calculated data with \(preCalculatedData.count) points:")
-            for (index, point) in preCalculatedData.enumerated() {
-                print("   Chart Point \(index + 1): Date=\(point.date), Value=£\(point.value)")
-            }
             return preCalculatedData
         }
         
