@@ -112,6 +112,8 @@ class TestDataGenerator {
         let calendar = Calendar.current
         
         // Data structure: [Date: [Account Index: Value]]
+        // TESTING STRATEGY: 14 Aug has HL Active Savings as LAST update (6 PM) with £0 change
+        // This tests "Since last update" logic showing £0 portfolio change when no actual change
         let personalData: [Date: [Int: Decimal]] = [
             // 01/05/2025
             calendar.date(from: DateComponents(year: 2025, month: 5, day: 1)) ?? Date(): [
@@ -179,8 +181,8 @@ class TestDataGenerator {
                 1: 37000,  // Monzo Savings
                 2: 22021,  // T212 Cash ISA
                 3: 20629,  // T212 S&S ISA
-                4: 45069,  // HL Active Savings (unchanged)
-                5: 12520,  // HL S&S ISA (unchanged)
+                4: 45069,  // HL Active Savings (user re-entered same value)
+                5: 12520,  // HL S&S ISA (user re-entered same value)
                 6: 77393,  // HL GSIPP
                 7: 1102    // T212 Invest (first appearance)
             ]
@@ -194,33 +196,40 @@ class TestDataGenerator {
                 if accountIndex < accounts.count {
                     let account = accounts[accountIndex]
                     
-                    // Only create update if value changed from previous or it's the first update
-                    let latestUpdate = account.updates.sorted { $0.date < $1.date }.last
-                    let shouldCreateUpdate = account.updates.isEmpty || latestUpdate?.value != value
+                    // Always create update for accounts that appear in date structure
+                    // This simulates user entering/confirming values, even if unchanged
+                    let shouldCreateUpdate = true
                     
                     if shouldCreateUpdate {
                         let update = AccountUpdate(value: value, account: account)
                         
-                        // Calculate timestamp based on whether this is initial update or subsequent
-                        let isInitialUpdate = account.updates.isEmpty
-                        let isT212Invest = account.name == "T212 Invest"
+                        // Calculate timestamp for proper "Since last update" testing
+                        let dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: date)
+                        let isAugust14th = dateComponents.year == 2025 && dateComponents.month == 8 && dateComponents.day == 14
                         
-                        if isInitialUpdate {
-                            if isT212Invest {
-                                // T212 Invest gets its own time on its creation date (14/08/2025)
-                                update.date = date.addingTimeInterval(10 * 3600 + 30 * 60) // 10:30 AM
+                        if isAugust14th {
+                            // Special timing for 14 August to test "Since last update" logic
+                            // Each account gets a different time, with HL Active Savings LAST
+                            let timeOffsets: [String: (hour: Int, minute: Int)] = [
+                                "T212 Stocks ISA": (1, 15),    // 01:15 AM 
+                                "T212 Invest": (2, 30),        // 02:30 AM (new account)
+                                "HL S&S ISA": (4, 0),          // 04:00 AM
+                                "HL GSIPP": (5, 15),           // 05:15 AM
+                                "Monzo Cash ISA": (9, 0),      // 09:00 AM
+                                "Monzo Savings": (10, 30),     // 10:30 AM  
+                                "T212 Cash ISA": (12, 0),      // 12:00 PM
+                                "HL Active Savings": (18, 0)   // 06:00 PM - MOST RECENT UPDATE
+                            ]
+                            
+                            if let timeOffset = timeOffsets[account.name] {
+                                update.date = date.addingTimeInterval(TimeInterval(timeOffset.hour * 3600 + timeOffset.minute * 60))
                             } else {
-                                // Initial updates for accounts created on 01/05/2025 are staggered
-                                let minutesOffset = TimeInterval(accountIndex * 2 * 60) // Stagger by 2 minutes each
-                                update.date = date.addingTimeInterval(9 * 3600 + minutesOffset) // Start at 09:00 AM
+                                // Fallback to 3 PM for any unlisted accounts
+                                update.date = date.addingTimeInterval(15 * 3600) // 3:00 PM
                             }
                         } else {
-                            // Subsequent updates get varied realistic times throughout the day
-                            let randomHour = Int.random(in: 8...20) // Between 8 AM and 8 PM
-                            let randomMinute = Int.random(in: 0...59)
-                            let randomSecond = Int.random(in: 0...59)
-                            let timeOffset = randomHour * 3600 + randomMinute * 60 + randomSecond
-                            update.date = date.addingTimeInterval(TimeInterval(timeOffset))
+                            // All other dates: consistent 08:00 AM updates
+                            update.date = date.addingTimeInterval(8 * 3600) // 08:00 AM
                         }
                         
                         modelContext.insert(update)

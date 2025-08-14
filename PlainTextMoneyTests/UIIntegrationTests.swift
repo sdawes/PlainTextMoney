@@ -274,7 +274,7 @@ struct UIIntegrationTests {
         
         
         // When: Calculate performance using actual service
-        let performance = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: accounts)
+        let performance = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: accounts)
         
         // Then: Should provide valid performance data
         #expect(performance.hasData, "Complex portfolio should have performance data")
@@ -740,9 +740,9 @@ struct UIIntegrationTests {
         let _ = TestHelpers.createTestUpdate(value: 10800, date: oneMonthLater, account: investmentAccount, in: context)
         saveContext(context)
         
-        // When: Calculate portfolio performance
+        // When: Calculate portfolio performance (use all-time since this spans months)
         let accounts = [savingsAccount, investmentAccount]
-        let portfolioPerformance = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: accounts)
+        let portfolioPerformance = PerformanceCalculationService.calculatePortfolioChangeAllTime(accounts: accounts)
         
         // Then: Should show meaningful results
         #expect(portfolioPerformance.hasData, "User portfolio should have performance data")

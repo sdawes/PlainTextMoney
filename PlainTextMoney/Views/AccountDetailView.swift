@@ -20,8 +20,8 @@ struct AccountDetailView: View {
     
     private var periodDisplayName: String {
         switch selectedPeriod {
-        case .todaysChanges:
-            return "Today's Changes"
+        case .lastUpdate:
+            return "Since Last Update"
         case .oneMonth:
             return "Past Month"
         case .threeMonths:
@@ -38,10 +38,12 @@ struct AccountDetailView: View {
         let sortedUpdates = account.updates.sorted { $0.date < $1.date }
         
         switch selectedPeriod {
-        case .todaysChanges:
-            // Show from start of today
-            let calendar = Calendar.current
-            return calendar.startOfDay(for: Date())
+        case .lastUpdate:
+            // Show from the second-to-last update
+            if sortedUpdates.count >= 2 {
+                return sortedUpdates[sortedUpdates.count - 2].date
+            }
+            return nil
         case .oneMonth:
             return calendar.date(byAdding: .day, value: -30, to: Date())
         case .threeMonths:

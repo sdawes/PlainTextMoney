@@ -143,7 +143,7 @@ struct PortfolioEngineTests {
         let timeline = await engine.generateFilteredPortfolioTimeline(
             accountIDs: accountIDs,
             startDate: nil,
-            period: .todaysChanges
+            period: .lastUpdate
         )
         
         // Then: Should return exactly 2 points for "Since Last Update"
@@ -186,32 +186,53 @@ struct PortfolioEngineTests {
     
     // MARK: - Portfolio Performance Calculation Tests
     
-    @Test func calculatePortfolioPerformance_LastUpdate() async throws {
-        // Given: Portfolio with known performance
+    @Test func calculatePortfolioPerformance_ZeroChangeUpdate() async throws {
+        // Given: The exact scenario from user's issue
+        // User updates account with SAME value -> should show £0 portfolio change
         let container = try TestHelpers.createTestContainer()
         let context = ModelContext(container)
         let engine = PortfolioEngine(modelContainer: container)
-        let (accounts, _) = TestHelpers.createTestPortfolio(in: context)
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let oneHourAgo = calendar.date(byAdding: .hour, value: -1, to: now)!
+        let twoHoursAgo = calendar.date(byAdding: .hour, value: -2, to: now)!
+        
+        // Create HL Active Savings account with historical updates
+        let hlAccount = TestHelpers.createTestAccount(name: "HL Active Savings", in: context)
+        let _ = TestHelpers.createTestUpdate(value: 45069, date: twoHoursAgo, account: hlAccount, in: context)  // Previous value
+        
+        // Create other account for portfolio context
+        let otherAccount = TestHelpers.createTestAccount(name: "Other Account", in: context)
+        let _ = TestHelpers.createTestUpdate(value: 10000, date: twoHoursAgo, account: otherAccount, in: context)
+        
         saveContext(context)
         
+        // User updates HL Active Savings with SAME VALUE (£0 change)
+        let _ = TestHelpers.createTestUpdate(value: 45069, date: now, account: hlAccount, in: context)  // Same value!
+        saveContext(context)
+        
+        let accounts = [hlAccount, otherAccount]
         let accountIDs = accounts.map { $0.persistentModelID }
         
-        // When: Calculate performance for last update
+        // When: Calculate performance since last update
         let performance = await engine.calculatePortfolioPerformance(
             accountIDs: accountIDs,
-            period: .todaysChanges
+            period: .lastUpdate
         )
         
-        // Then: Should have valid performance data
+        // Then: Should show £0 change (not £31 like the old confusing logic)
         #expect(performance.hasData, "Should have performance data")
-        #expect(performance.actualPeriodLabel == "Since last update")
+        #expect(performance.actualPeriodLabel.contains("Since last update"))
         
-        // Note: Portfolio calculation uses timeline approach, not simple addition
-        // The actual result should be consistent, so test for reasonable ranges
-        #expect(performance.percentage > -10.0, "Performance should be within reasonable range")
-        #expect(performance.percentage < 15.0, "Performance should be within reasonable range")
-        // Focus on testing that calculation is stable and returns valid data
-        #expect(performance.absolute != 0, "Should have some portfolio change")
+        // Expected calculation:
+        // Before last update: £45069 + £10000 = £55069
+        // After last update: £45069 + £10000 = £55069 (same!)
+        // Change: £0 (0% change)
+        
+        #expect(performance.isPositive, "Zero change should be considered positive")
+        TestHelpers.expectDecimalEqual(performance.absolute, 0, accuracy: Decimal(0.01))
+        TestHelpers.expectPercentageEqual(performance.percentage, 0.0, accuracy: 0.01)
     }
     
     @Test func calculatePortfolioPerformance_AllTime() async throws {
@@ -309,12 +330,12 @@ struct PortfolioEngineTests {
         // When: Calculate performance multiple times
         let performance1 = await engine.calculatePortfolioPerformance(
             accountIDs: accountIDs,
-            period: .todaysChanges
+            period: .lastUpdate
         )
         
         let performance2 = await engine.calculatePortfolioPerformance(
             accountIDs: accountIDs,
-            period: .todaysChanges
+            period: .lastUpdate
         )
         
         // Then: Results should be identical

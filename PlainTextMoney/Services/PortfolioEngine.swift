@@ -81,9 +81,9 @@ actor PortfolioEngine {
     ) async -> [ChartDataPoint] {
         let fullTimeline = await generatePortfolioTimeline(accountIDs: accountIDs)
         
-        // Handle special case for todaysChanges
-        if period == .todaysChanges && startDate == nil {
-            // For "Today's Changes", filter to today's updates only
+        // Handle special case for lastUpdate
+        if period == .lastUpdate && startDate == nil {
+            // For "Last Update", filter to recent updates only
             let calendar = Calendar.current
             let startOfToday = calendar.startOfDay(for: Date())
             
@@ -123,8 +123,8 @@ actor PortfolioEngine {
         let activeAccountIDs = activeAccounts.map { $0.persistentModelID }
         
         switch period {
-        case .todaysChanges:
-            return await calculatePortfolioChangesToday(accountIDs: activeAccountIDs)
+        case .lastUpdate:
+            return await calculatePortfolioChangeFromLastUpdate(accountIDs: activeAccountIDs)
         case .oneMonth:
             return await calculatePortfolioChangeOneMonth(accountIDs: activeAccountIDs)
         case .threeMonths:
@@ -146,7 +146,7 @@ actor PortfolioEngine {
         period: PerformanceCalculationService.TimePeriod
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool) {
         switch period {
-        case .todaysChanges:
+        case .lastUpdate:
             return PerformanceCalculationService.calculateAccountChangeFromLastUpdate(account: account)
         case .oneMonth:
             return PerformanceCalculationService.calculateAccountChangeOneMonth(account: account)
@@ -161,7 +161,7 @@ actor PortfolioEngine {
     
     // MARK: - Private Calculation Methods
     
-    private func calculatePortfolioChangesToday(
+    private func calculatePortfolioChangeFromLastUpdate(
         accountIDs: [PersistentIdentifier]
     ) async -> (percentage: Double, absolute: Decimal, isPositive: Bool, hasData: Bool, actualPeriodLabel: String) {
         let accounts = fetchAccounts(withIDs: accountIDs)
@@ -171,8 +171,9 @@ actor PortfolioEngine {
             return (0.0, 0, true, false, "") 
         }
         
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: Date())
+        // Find the most recent update across ALL accounts
+        let allUpdates = activeAccounts.flatMap { $0.updates }.sorted { $0.date < $1.date }
+        guard let mostRecentUpdate = allUpdates.last else { return (0.0, 0, true, false, "") }
         
         // Calculate current portfolio total
         let currentTotal = activeAccounts.reduce(Decimal(0)) { total, account in
@@ -180,37 +181,51 @@ actor PortfolioEngine {
             return total + (latestUpdate?.value ?? 0)
         }
         
-        // Calculate portfolio total at start of today
-        let startOfTodayTotal = activeAccounts.reduce(Decimal(0)) { total, account in
-            let updatesBeforeToday = account.updates
-                .filter { $0.date < startOfToday }
-                .sorted { $0.date < $1.date }
+        // Find which account owns the most recent update
+        let mostRecentAccountName = mostRecentUpdate.account?.name
+        
+        // Calculate portfolio total just before the most recent update
+        // CRITICAL: Only the account that owns the most recent update uses its previous value
+        let beforeLastUpdateTotal = activeAccounts.reduce(Decimal(0)) { total, account in
+            let sortedUpdates = account.updates.sorted { $0.date < $1.date }
             
-            if let lastUpdateBeforeToday = updatesBeforeToday.last {
-                return total + lastUpdateBeforeToday.value
+            // If this is the account that owns the most recent update, use its second-to-last value
+            if account.name == mostRecentAccountName {
+                // Find the previous update for this account
+                if sortedUpdates.count >= 2 {
+                    let previousValue = sortedUpdates[sortedUpdates.count - 2].value
+                    return total + previousValue
+                } else {
+                    // This account only has one update (the most recent one)
+                    // Don't include it in the baseline (it was added in the last update)
+                    return total
+                }
             } else {
-                return total
+                // This account wasn't updated in the most recent update, use its current value
+                let currentValue = sortedUpdates.last?.value ?? 0
+                return total + currentValue
             }
         }
         
-        let absoluteChange = currentTotal - startOfTodayTotal
+        // Calculate change since last update
+        let absoluteChange = currentTotal - beforeLastUpdateTotal
         let isPositive = absoluteChange >= 0
         
+        // Calculate percentage change
         let percentage: Double
-        if startOfTodayTotal > 0 {
-            let change = (absoluteChange / startOfTodayTotal) * 100
+        if beforeLastUpdateTotal > 0 {
+            let change = (absoluteChange / beforeLastUpdateTotal) * 100
             percentage = Double(truncating: change as NSNumber)
         } else if absoluteChange > 0 {
-            return (100.0, absoluteChange, true, true, "Today's changes")
+            return (100.0, absoluteChange, true, true, "Since last update")
         } else {
             percentage = 0.0
         }
         
-        let updatedTodayCount = activeAccounts.filter { account in
-            account.updates.contains { $0.date >= startOfToday }
-        }.count
-        
-        let label = updatedTodayCount > 0 ? "Today's changes (\(updatedTodayCount) account\(updatedTodayCount == 1 ? "" : "s"))" : "Today's changes"
+        // Create label with the date of the last update
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        let label = "Since last update (\(formatter.string(from: mostRecentUpdate.date)))"
         
         return (percentage, absoluteChange, isPositive, true, label)
     }

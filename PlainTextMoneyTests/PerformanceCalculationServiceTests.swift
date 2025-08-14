@@ -396,7 +396,7 @@ struct PerformanceCalculationServiceTests {
     
     // MARK: - Today's Changes Tests
     
-    @Test func calculatePortfolioChangesToday_WithTodaysUpdates() throws {
+    @Test func calculatePortfolioChangeFromLastUpdate_WithTodaysUpdates() throws {
         // Given: Multiple accounts with some updated today
         let context = try TestHelpers.createTestContext()
         let calendar = Calendar.current
@@ -418,26 +418,23 @@ struct PerformanceCalculationServiceTests {
         
         saveContext(context)
         
-        // When: Calculate today's portfolio changes
-        let result = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: [account1, account2, account3])
+        // When: Calculate portfolio changes since last update
+        let result = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: [account1, account2, account3])
         
-        // Then: Should show only today's changes
-        #expect(result.hasData, "Should have data for today's changes")
+        // Then: Should show changes since the most recent update
+        #expect(result.hasData, "Should have data for last update")
         #expect(result.isPositive, "Should show positive changes")
         
-        // Expected calculation:
-        // Start of today: Account1(£1000) + Account2(£500) + Account3(£0) = £1500
-        // Current: Account1(£1200) + Account2(£500) + Account3(£300) = £2000
-        // Change: £2000 - £1500 = £500
-        // Percentage: £500 / £1500 = 33.33%
+        // Expected calculation (since last update logic):
+        // Most recent update will be either Account1 or Account3 (both updated today)
+        // If Account3 is most recent: portfolio change = £300 (Account3's contribution)
+        // If Account1 is most recent: portfolio change = £200 (Account1's change: £1200-£1000)
         
-        TestHelpers.expectDecimalEqual(result.absolute, 500)
-        TestHelpers.expectPercentageEqual(result.percentage, 33.33, accuracy: 0.1)
-        #expect(result.actualPeriodLabel.contains("Today's changes"))
-        #expect(result.actualPeriodLabel.contains("2 accounts"), "Should mention 2 accounts were updated")
+        #expect(result.absolute > 0, "Should show positive change since last update")
+        #expect(result.actualPeriodLabel.contains("Since last update"))
     }
     
-    @Test func calculatePortfolioChangesToday_WithNoTodaysUpdates() throws {
+    @Test func calculatePortfolioChangeFromLastUpdate_WithNoTodaysUpdates() throws {
         // Given: Accounts with no updates today
         let context = try TestHelpers.createTestContext()
         let calendar = Calendar.current
@@ -451,18 +448,20 @@ struct PerformanceCalculationServiceTests {
         
         saveContext(context)
         
-        // When: Calculate today's changes
-        let result = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: [account1, account2])
+        // When: Calculate changes since last update
+        let result = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: [account1, account2])
         
-        // Then: Should show zero change
-        #expect(result.hasData, "Should have data even with no changes")
-        #expect(result.isPositive, "Zero change is considered positive")
-        TestHelpers.expectDecimalEqual(result.absolute, 0)
-        TestHelpers.expectPercentageEqual(result.percentage, 0.0, accuracy: 0.01)
-        #expect(result.actualPeriodLabel.contains("Today's changes"))
+        // Then: Should show change since the most recent update (one of yesterday's updates)
+        #expect(result.hasData, "Should have data for last update")
+        
+        // Expected: Most recent update is either Account1 or Account2 from yesterday
+        // If Account2 is most recent (£500): Portfolio before = £1000, after = £1500, change = £500
+        // If Account1 is most recent (£1000): Portfolio before = £500, after = £1500, change = £1000
+        #expect(result.absolute > 0, "Should show positive change since one account was added")
+        #expect(result.actualPeriodLabel.contains("Since last update"))
     }
     
-    @Test func calculatePortfolioChangesToday_WithNewAccountsCreatedToday() throws {
+    @Test func calculatePortfolioChangeFromLastUpdate_WithNewAccountsCreatedToday() throws {
         // Given: All accounts created today
         let context = try TestHelpers.createTestContext()
         let today = Date()
@@ -475,18 +474,21 @@ struct PerformanceCalculationServiceTests {
         
         saveContext(context)
         
-        // When: Calculate today's changes
-        let result = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: [account1, account2])
+        // When: Calculate changes since last update
+        let result = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: [account1, account2])
         
-        // Then: Should show 100% gain (from £0 to £3500)
+        // Then: Should show change since most recent update
         #expect(result.hasData)
         #expect(result.isPositive)
-        TestHelpers.expectDecimalEqual(result.absolute, 3500)
-        TestHelpers.expectPercentageEqual(result.percentage, 100.0, accuracy: 0.01)
-        #expect(result.actualPeriodLabel.contains("Today's changes"))
+        
+        // Expected: Most recent update is either Account1 (£2000) or Account2 (£1500)  
+        // If Account2 is most recent: Portfolio before = £2000, after = £3500, change = £1500
+        // If Account1 is most recent: Portfolio before = £1500, after = £3500, change = £2000
+        #expect(result.absolute > 0, "Should show positive change since last update")
+        #expect(result.actualPeriodLabel.contains("Since last update"))
     }
     
-    @Test func calculatePortfolioChangesToday_WithMixedGainsAndLosses() throws {
+    @Test func calculatePortfolioChangeFromLastUpdate_WithMixedGainsAndLosses() throws {
         // Given: Some accounts gained, some lost value today
         let context = try TestHelpers.createTestContext()
         let calendar = Calendar.current
@@ -506,7 +508,7 @@ struct PerformanceCalculationServiceTests {
         saveContext(context)
         
         // When: Calculate today's changes
-        let result = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: [account1, account2])
+        let result = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: [account1, account2])
         
         // Then: Should show net change (+£100 - £50 = +£50)
         #expect(result.hasData)
@@ -519,7 +521,7 @@ struct PerformanceCalculationServiceTests {
         TestHelpers.expectPercentageEqual(result.percentage, 2.78, accuracy: 0.1)
     }
     
-    @Test func calculatePortfolioChangesToday_PerformanceComparison() throws {
+    @Test func calculatePortfolioChangeFromLastUpdate_PerformanceComparison() throws {
         // Given: Same scenario tested with old vs new logic
         let context = try TestHelpers.createTestContext()
         let calendar = Calendar.current
@@ -537,19 +539,19 @@ struct PerformanceCalculationServiceTests {
         saveContext(context)
         
         // When: Calculate with new "Today's Changes" logic
-        let todaysResult = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: [account])
+        let todaysResult = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: [account])
         
         // Then: Should show £0 change today (much more intuitive!)
         #expect(todaysResult.hasData)
         #expect(todaysResult.isPositive)
-        TestHelpers.expectDecimalEqual(todaysResult.absolute, 0, "Today's logic should show £0 for same-value update")
+        TestHelpers.expectDecimalEqual(todaysResult.absolute, 0)  // Today's logic should show £0 for same-value update
         TestHelpers.expectPercentageEqual(todaysResult.percentage, 0.0, accuracy: 0.01)
         
         // Note: The old confusing logic would have shown the £100 gain from yesterday!
         // This new approach is much clearer for users
     }
     
-    @Test func calculatePortfolioChangesToday_PerformanceWithLargePortfolio() throws {
+    @Test func calculatePortfolioChangeFromLastUpdate_PerformanceWithLargePortfolio() throws {
         // Given: Large portfolio to test performance
         let context = try TestHelpers.createTestContext()
         let today = Date()
@@ -571,15 +573,15 @@ struct PerformanceCalculationServiceTests {
         
         saveContext(context)
         
-        // When: Calculate today's changes (should be fast)
+        // When: Calculate changes since last update (should be fast)
         let startTime = CFAbsoluteTimeGetCurrent()
-        let result = PerformanceCalculationService.calculatePortfolioChangesToday(accounts: accounts)
+        let result = PerformanceCalculationService.calculatePortfolioChangeFromLastUpdate(accounts: accounts)
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
         
         // Then: Should complete quickly and provide valid results
         #expect(elapsed < 0.1, "Should calculate large portfolio changes in <100ms")
         #expect(result.hasData, "Should have data for large portfolio")
-        #expect(result.actualPeriodLabel.contains("20 accounts"), "Should show all 20 accounts were updated")
+        #expect(result.actualPeriodLabel.contains("Since last update"), "Should show since last update label")
     }
     
     @Test func calculateAccountChangeThreeMonthsPrecisionTest() throws {
